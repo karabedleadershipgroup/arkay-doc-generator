@@ -6,7 +6,6 @@
 <title>Arkay Document Generator</title>
 <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.6/dist/pizzip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.47.3/build/docxtemplater.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 :root { --green:#6DBE45; --green-dark:#143608; --black:#141414; --paper:#F7F7F5; --light:#F1F8EC; --border:#D9EBC9; }
 * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
@@ -85,7 +84,7 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
 
 <div id="gate">
   <img src="assets/logo.png" alt="Arkay Energy Solutions">
-  <input type="password" id="gateCode" placeholder="Access code" autocomplete="off">
+  <input type="password" id="gateCode" placeholder="Access code" autocomplete="off" onkeydown="if(event.key==='Enter')unlock()">
   <button class="btn btn-green" onclick="unlock()">Enter</button>
   <p>Arkay Energy Solutions — Document Generator</p>
 </div>
@@ -153,8 +152,8 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
   <button class="btn btn-black" onclick="preview()">Preview Document</button>
   <div id="previewWrap" class="hidden">
     <div id="docPreview" style="margin-top:14px"></div>
-    <button class="btn btn-green" onclick="generate('pdf')">⬇ Generate PDF + Save</button>
-    <button class="btn btn-outline" onclick="generate('docx')">⬇ Generate Word + Save</button>
+    <button class="btn btn-green" onclick="generatePDF()">⬇ Generate PDF + Log</button>
+    <button class="btn btn-outline" onclick="generate('docx')">⬇ Generate Word + Save to Dropbox</button>
   </div>
 </section>
 
@@ -163,6 +162,19 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
   <div class="card">
     <h3>Job History</h3>
     <input id="jobSearch" placeholder="Search client, address, number…" oninput="renderJobs()">
+    <div id="jobEditor" class="hidden" style="background:var(--light);border:1.5px solid var(--green);border-radius:10px;padding:12px;margin-top:10px">
+      <b id="jeTitle" style="font-size:14px"></b>
+      <div class="row" style="margin-top:8px">
+        <div><label>Status</label><select id="jeStatus"><option value="sent">Sent / Unpaid</option><option value="accepted">Accepted</option><option value="paid">Paid</option><option value="historical">Historical</option></select></div>
+        <div><label>Amount ($)</label><input id="jeAmount" inputmode="decimal"></div>
+      </div>
+      <label>Client</label><input id="jeClient">
+      <div class="row">
+        <button class="btn btn-green" onclick="jobSave()">Save</button>
+        <button class="btn btn-outline" onclick="$('jobEditor').classList.add('hidden')">Cancel</button>
+      </div>
+      <button class="btn" style="background:#fde8e8;color:#a00;border:1.5px solid #a00" onclick="jobDelete()">🗑 Delete this job</button>
+    </div>
     <div style="overflow-x:auto; margin-top:10px">
       <table class="hist"><thead><tr><th>No.</th><th>Type</th><th>Client / Address</th><th>Amount</th><th></th></tr></thead>
       <tbody id="jobsBody"></tbody></table>
@@ -478,14 +490,26 @@ function filename(ext) {
   return `${short}- ${DOC_TYPE} No.${$("fNum").value}.${ext}`;
 }
 
+function generatePDF() {
+  preview();
+  const w = window.open("", "_blank");
+  if (!w) { toast("Pop-up blocked — allow pop-ups for this site"); return; }
+  w.document.write(`<html><head><title>${filename("pdf").replace(".pdf", "")}</title><base href="${location.origin}/">
+    <style>${document.querySelector("style").innerHTML}
+    body{background:#fff;margin:0} #docPreview{border:none;padding:24px 6px} @page{margin:12mm}</style>
+    </head><body>${$("docPreview").outerHTML}</body></html>`);
+  w.document.close();
+  w.onload = () => setTimeout(() => w.print(), 500);
+  saveRecord();
+  toast("In the print box, choose 'Save as PDF'", 6000);
+}
+
 async function generate(kind) {
   preview();
   toast("Generating…", 10000);
   try {
     let blob;
-    if (kind === "pdf") {
-      blob = await html2pdf().set({ margin: [10, 10], filename: filename("pdf"), image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "letter" }, pagebreak: { mode: ["css", "legacy"] } }).from($("docPreview")).outputPdf("blob");
-    } else {
+    {
       const isInv = DOC_TYPE === "Invoice";
       const tplPath = isInv ? "templates/Arkay_Invoice_Template.docx" : "templates/Arkay_Proposal_Template.docx";
       const buf = await (await fetch(tplPath)).arrayBuffer();
@@ -508,10 +532,10 @@ async function generate(kind) {
       blob = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
     }
     // download
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename(kind === "pdf" ? "pdf" : "docx"); a.click();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename("docx"); a.click();
     // save record + Dropbox
     await saveRecord();
-    dropboxSave(blob, kind === "pdf" ? "pdf" : "docx");
+    dropboxSave(blob, "docx");
     toast("✅ Generated, logged & saving to Dropbox");
   } catch (e) { toast("Error: " + e.message, 5000); }
 }
@@ -548,7 +572,7 @@ function renderJobs() {
     .map((j) => `<tr><td>${j.doc_number}</td><td><span class="pill ${j.doc_type[0]}">${j.doc_type[0]}</span></td>
       <td><b>${j.client || "—"}</b><br><span style="color:#777">${j.property_address || ""}</span></td>
       <td>${fmt(j.amount)}</td>
-      <td>${j.doc_type === "Proposal" ? `<button class="chips-btn" style="padding:6px 10px;border:1.5px solid var(--green);background:var(--light);border-radius:8px;font-weight:700;color:var(--green-dark)" onclick='convert(${JSON.stringify(j.doc_number)})'>→ Invoice</button>` : ""}</td></tr>`).join("");
+      <td style="white-space:nowrap">${j.doc_type === "Proposal" ? `<button style="padding:6px 10px;border:1.5px solid var(--green);background:var(--light);border-radius:8px;font-weight:700;color:var(--green-dark)" onclick='convert(${JSON.stringify(j.doc_number)})'>→ Inv</button> ` : ""}<button style="padding:6px 10px;border:1.5px solid #999;background:#fff;border-radius:8px;font-weight:700" onclick='jobEdit(${JSON.stringify(j.doc_number)})'>✎</button></td></tr>`).join("");
 }
 async function convert(docNumber) {
   const j = ALL_JOBS.find((x) => x.doc_number === docNumber); if (!j) return;
@@ -567,18 +591,57 @@ async function convert(docNumber) {
   showTab("new"); toast(`Converting ${docNumber} → Invoice`);
 }
 
+/* =============== EDIT / DELETE =============== */
+let _editing = null;
+function jobEdit(docNumber) {
+  const j = ALL_JOBS.find((x) => x.doc_number === docNumber); if (!j) return;
+  _editing = docNumber;
+  $("jeTitle").textContent = `Editing ${j.doc_type} ${docNumber} — ${j.property_address || ""}`;
+  $("jeStatus").value = j.status || "sent";
+  $("jeAmount").value = j.amount ?? "";
+  $("jeClient").value = j.client || "";
+  $("jobEditor").classList.remove("hidden");
+  $("jobEditor").scrollIntoView({ behavior: "smooth" });
+}
+async function jobSave() {
+  try {
+    await api("jobs", { method: "PATCH", body: JSON.stringify({
+      doc_number: _editing, status: $("jeStatus").value,
+      amount: $("jeAmount").value === "" ? "" : parseFloat($("jeAmount").value),
+      client: $("jeClient").value,
+    }) });
+    $("jobEditor").classList.add("hidden");
+    toast("✅ Job updated"); loadJobs();
+  } catch (e) { toast("Error: " + e.message); }
+}
+async function jobDelete() {
+  const j = ALL_JOBS.find((x) => x.doc_number === _editing);
+  const warn = j && j.status === "historical"
+    ? `${_editing} is part of the imported history that powers price intelligence. Delete anyway?`
+    : `Delete ${_editing} permanently? This can't be undone.`;
+  if (!confirm(warn)) return;
+  try {
+    await api(`jobs?doc_number=${encodeURIComponent(_editing)}`, { method: "DELETE" });
+    $("jobEditor").classList.add("hidden");
+    toast("🗑 Deleted"); loadJobs();
+  } catch (e) { toast("Error: " + e.message); }
+}
+
 /* =============== DASHBOARD =============== */
 function renderDash() {
   const props = ALL_JOBS.filter((j) => j.doc_type === "Proposal");
   const invs = ALL_JOBS.filter((j) => j.doc_type === "Invoice");
   const openProps = props.filter((p) => !ALL_JOBS.some((i) => i.converted_from === p.doc_number) && p.status !== "historical");
   const unpaid = invs.filter((i) => i.status === "sent");
+  const paid = invs.filter((i) => i.status === "paid");
   const sum = (arr) => arr.reduce((s, j) => s + (Number(j.amount) || 0), 0);
   $("statGrid").innerHTML = `
     <div class="stat"><div class="n">${fmt(sum(props))}</div><div class="l">Proposals (${props.length})</div></div>
     <div class="stat"><div class="n">${fmt(sum(invs))}</div><div class="l">Invoices (${invs.length})</div></div>
     <div class="stat"><div class="n">${openProps.length}</div><div class="l">Open Proposals</div></div>
-    <div class="stat"><div class="n">${unpaid.length}</div><div class="l">Unpaid Invoices</div></div>`;
+    <div class="stat"><div class="n">${unpaid.length}</div><div class="l">Unpaid Invoices</div></div>
+    <div class="stat"><div class="n">${fmt(sum(paid))}</div><div class="l">Paid (${paid.length})</div></div>
+    <div class="stat"><div class="n">${fmt(sum(unpaid))}</div><div class="l">Outstanding</div></div>`;
   const byType = {};
   ALL_JOBS.forEach((j) => { if (j.job_type) { byType[j.job_type] = byType[j.job_type] || { n: 0, v: 0 }; byType[j.job_type].n++; byType[j.job_type].v += Number(j.amount) || 0; } });
   $("byType").innerHTML = "<label>Jobs by Type</label>" + Object.entries(byType).sort((a, b) => b[1].v - a[1].v)
