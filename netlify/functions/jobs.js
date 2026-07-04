@@ -7,7 +7,7 @@ const headers = {
   "Content-Type": "application/json",
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, X-Access-Code",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
 async function supa(path, opts = {}) {
@@ -83,6 +83,25 @@ exports.handler = async (event) => {
         }]),
       });
       return { statusCode: 200, headers, body: JSON.stringify({ saved: row }) };
+    }
+
+    // PATCH → edit a job (status, amount, client, job_type)
+    if (event.httpMethod === "PATCH") {
+      const b = JSON.parse(event.body || "{}");
+      const fields = {};
+      ["status", "amount", "client", "job_type", "property_address", "city"].forEach((k) => {
+        if (b[k] !== undefined) fields[k] = b[k] === "" ? null : b[k];
+      });
+      const rows = await supa(`jobs?doc_number=eq.${encodeURIComponent(b.doc_number)}`, {
+        method: "PATCH", body: JSON.stringify(fields),
+      });
+      return { statusCode: 200, headers, body: JSON.stringify({ updated: rows }) };
+    }
+
+    // DELETE ?doc_number=X → remove a job
+    if (event.httpMethod === "DELETE") {
+      await supa(`jobs?doc_number=eq.${encodeURIComponent(params.doc_number)}`, { method: "DELETE" });
+      return { statusCode: 200, headers, body: JSON.stringify({ deleted: params.doc_number }) };
     }
 
     return { statusCode: 400, headers, body: JSON.stringify({ error: "Unknown action" }) };
