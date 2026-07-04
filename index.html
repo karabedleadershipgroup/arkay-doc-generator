@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Arkay Document Generator</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pizzip/3.1.6/pizzip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.6/dist/pizzip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.47.3/build/docxtemplater.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
@@ -484,7 +484,7 @@ async function generate(kind) {
   try {
     let blob;
     if (kind === "pdf") {
-      blob = await html2pdf().set({ margin: [10, 10], filename: filename("pdf"), image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "letter" }, pagebreak: { mode: ["css", "avoid-all"] } }).from($("docPreview")).outputPdf("blob");
+      blob = await html2pdf().set({ margin: [10, 10], filename: filename("pdf"), image: { type: "jpeg", quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: "mm", format: "letter" }, pagebreak: { mode: ["css", "legacy"] } }).from($("docPreview")).outputPdf("blob");
     } else {
       const isInv = DOC_TYPE === "Invoice";
       const tplPath = isInv ? "templates/Arkay_Invoice_Template.docx" : "templates/Arkay_Proposal_Template.docx";
