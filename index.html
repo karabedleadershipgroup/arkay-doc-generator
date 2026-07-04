@@ -23,7 +23,7 @@ main { max-width:760px; margin:0 auto; padding:16px 14px 90px; }
 label { display:block; font-size:13px; font-weight:700; margin:12px 0 4px; color:#333; }
 input, select, textarea { width:100%; padding:12px; border:1.5px solid #ccc; border-radius:8px; font-size:16px; font-family:inherit; background:#fff; }
 input:focus, select:focus, textarea:focus { outline:none; border-color:var(--green); }
-textarea { min-height:170px; line-height:1.45; font-size:14px; }
+textarea { min-height:320px; line-height:1.5; font-size:15px; }
 .row { display:flex; gap:10px; } .row > * { flex:1; }
 .toggle { display:flex; border:2px solid var(--black); border-radius:10px; overflow:hidden; }
 .toggle button { flex:1; padding:13px; border:none; background:#fff; font-weight:800; font-size:15px; color:#777; }
@@ -376,7 +376,11 @@ async function unlock() {
 if (ACCESS) { $("gate").style.display = "none"; init(); }
 
 /* =============== INIT =============== */
+function autoGrow(el) { el.style.height = "auto"; el.style.height = Math.max(el.scrollHeight + 4, 320) + "px"; }
+
 async function init() {
+  const sc = $("fScope");
+  sc.addEventListener("input", () => autoGrow(sc));
   $("fDate").value = new Date().toISOString().slice(0, 10);
   const sel = $("fJobType");
   Object.keys(TEMPLATES).forEach((k) => { const o = document.createElement("option"); o.value = o.textContent = k; sel.appendChild(o); });
@@ -406,7 +410,7 @@ function applyTemplate() {
   const city = $("fCity").value || "[CITY]";
   const ahModel = ton === "4" ? "45MUAAQ48XX3" : ton === "5" ? "45MUAAQ60XX3" : "[AIR HANDLER MODEL]";
   const hpModel = ton === "4" ? "37MURAQ48" : ton === "5" ? "37MURAQ60" : "[HEAT PUMP MODEL]";
-  $("fScope").value = t.scope.replaceAll("{TON}", ton).replaceAll("{CITY}", city).replaceAll("{SYS}", sys).replaceAll("{AH_MODEL}", ahModel).replaceAll("{HP_MODEL}", hpModel);
+  autoGrow($("fScope")), $("fScope").value = t.scope.replaceAll("{TON}", ton).replaceAll("{CITY}", city).replaceAll("{SYS}", sys).replaceAll("{AH_MODEL}", ahModel).replaceAll("{HP_MODEL}", hpModel);
   $("obsWrap").classList.toggle("hidden", !t.obs);
   if (t.obs) $("fObs").value = t.observation;
   if (t.docTitle.includes("INVOICE")) setDocType("Invoice");
@@ -442,7 +446,7 @@ async function draftScope(notes) {
   toast("✨ Drafting scope in Arkay style…", 8000);
   try {
     const d = await api("scope", { method: "POST", body: JSON.stringify({ action: "draft", text: notes, docType: DOC_TYPE, jobType: $("fJobType").value }) });
-    $("fScope").value = d.scope;
+    $("fScope").value = d.scope; autoGrow($("fScope"));
     if (d.observation) { $("obsWrap").classList.remove("hidden"); $("fObs").value = d.observation; }
     toast("Scope drafted — review and edit");
   } catch (e) { toast("AI error: " + e.message); }
@@ -461,6 +465,7 @@ function fullAddress() { return [$("fAddr").value, $("fCity").value ? $("fCity")
 function amountStr() { const a = parseFloat($("fAmount").value); return isNaN(a) ? "$0.00" : "$" + a.toLocaleString("en-US", { minimumFractionDigits: 2 }); }
 
 function preview() {
+  autoGrow($("fScope"));
   const t = TEMPLATES[$("fJobType").value] || {};
   const hasObs = !$("obsWrap").classList.contains("hidden") && $("fObs").value.trim();
   $("docPreview").innerHTML = `
