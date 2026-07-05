@@ -23,7 +23,19 @@ main { max-width:760px; margin:0 auto; padding:16px 14px 90px; }
 label { display:block; font-size:13px; font-weight:700; margin:12px 0 4px; color:#333; }
 input, select, textarea { width:100%; padding:12px; border:1.5px solid #ccc; border-radius:8px; font-size:16px; font-family:inherit; background:#fff; }
 input:focus, select:focus, textarea:focus { outline:none; border-color:var(--green); }
-textarea { min-height:320px; line-height:1.5; font-size:15px; }
+textarea { min-height:140px; line-height:1.5; font-size:15px; }
+.scopebar { display:flex; gap:6px; margin:12px 0 6px; flex-wrap:wrap; }
+.scopebar button { padding:9px 13px; border:1.5px solid var(--black); background:#fff; border-radius:8px; font-weight:700; font-size:13px; }
+.scopebar button:active { background:var(--green); color:var(--green-dark); }
+.scopeedit { min-height:340px; border:1.5px solid #ccc; border-radius:8px; padding:14px 12px; background:#fff; font-size:14.5px; line-height:1.55; outline:none; }
+.scopeedit:focus { border-color:var(--green); }
+.scopeedit .lh { font-weight:800; margin:12px 0 5px; }
+.scopeedit .lh::before { content:"● "; color:var(--green); }
+.scopeedit .lm { margin-left:28px; text-indent:-14px; margin-bottom:2px; }
+.scopeedit .lm::before { content:"•\00a0\00a0"; }
+.scopeedit .ls { margin-left:84px; text-indent:-17px; }
+.scopeedit .ls::before { content:"o\00a0\00a0"; }
+.scopeedit .lg { min-height:11px; }
 .row { display:flex; gap:10px; } .row > * { flex:1; }
 .toggle { display:flex; border:2px solid var(--black); border-radius:10px; overflow:hidden; }
 .toggle button { flex:1; padding:13px; border:none; background:#fff; font-weight:800; font-size:15px; color:#777; }
@@ -142,8 +154,15 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
       <textarea id="fObs" style="min-height:110px"></textarea>
     </div>
     <label>Scope <span id="scopeLang" style="color:var(--green)"></span></label>
-    <div style="font-size:12px;color:#888;margin:0 0 6px;line-height:1.5">Header: start line with <b>#</b> (or ALL CAPS ending in ":") &nbsp;·&nbsp; Sub-bullet: start with <b>-</b> &nbsp;·&nbsp; <b>**bold**</b> &nbsp;·&nbsp; <i>*italic*</i></div>
-    <textarea id="fScope" placeholder="Pick a job type to auto-fill, dictate with the mic, or type here."></textarea>
+    <div style="font-size:12px;color:#888;margin:0 0 6px">Tap a line, then a style button. Select words, then <b>B</b> or <i>I</i>.</div>
+    <div class="scopebar">
+      <button type="button" onclick="setLine('head')">● Header</button>
+      <button type="button" onclick="setLine('main')">• Bullet</button>
+      <button type="button" onclick="setLine('sub')">&nbsp;&nbsp;o Sub</button>
+      <button type="button" onclick="fmt('bold')" style="font-weight:800">B</button>
+      <button type="button" onclick="fmt('italic')" style="font-style:italic;font-family:Georgia">I</button>
+    </div>
+    <div id="fScope" class="scopeedit" contenteditable="true"></div>
     <div class="row">
       <button class="btn btn-outline" onclick="translateScope()">🇪🇸 Español</button>
       <button class="btn btn-outline" onclick="draftFromNotes()">✨ AI Clean-Up</button>
@@ -378,15 +397,14 @@ async function unlock() {
 if (ACCESS) { $("gate").style.display = "none"; init(); }
 
 /* =============== INIT =============== */
-function autoGrow(el) { el.style.height = "auto"; el.style.height = Math.max(el.scrollHeight + 4, 320) + "px"; }
-
 async function init() {
   const sc = $("fScope");
-  sc.addEventListener("input", () => autoGrow(sc));
+  sc.addEventListener("input", () => normalizeEditor());
+  sc.addEventListener("keyup", (e) => { if (e.key === "Enter") scopeBlocks().forEach((b) => { if (b.classList.contains("lh") && !b.innerText.trim()) b.className = "lm"; }); });
   $("fDate").value = new Date().toISOString().slice(0, 10);
   const sel = $("fJobType");
   Object.keys(TEMPLATES).forEach((k) => { const o = document.createElement("option"); o.value = o.textContent = k; sel.appendChild(o); });
-  EQUIPMENT.forEach((e) => { const b = document.createElement("button"); b.textContent = e.label; b.onclick = () => { $("fScope").value += ($("fScope").value ? "\n" : "") + e.text; }; $("equipChips").appendChild(b); });
+  EQUIPMENT.forEach((e) => { const b = document.createElement("button"); b.textContent = e.label; b.onclick = () => { appendScopeMarkers(e.text); }; $("equipChips").appendChild(b); });
   try { const { next_number } = await api("jobs?action=next-number"); $("fNum").value = next_number; } catch (e) { toast("Numbering offline: " + e.message); }
   loadJobs();
 }
@@ -412,7 +430,7 @@ function applyTemplate() {
   const city = $("fCity").value || "[CITY]";
   const ahModel = ton === "4" ? "45MUAAQ48XX3" : ton === "5" ? "45MUAAQ60XX3" : "[AIR HANDLER MODEL]";
   const hpModel = ton === "4" ? "37MURAQ48" : ton === "5" ? "37MURAQ60" : "[HEAT PUMP MODEL]";
-  autoGrow($("fScope")), $("fScope").value = t.scope.replaceAll("{TON}", ton).replaceAll("{CITY}", city).replaceAll("{SYS}", sys).replaceAll("{AH_MODEL}", ahModel).replaceAll("{HP_MODEL}", hpModel);
+  setScopeMarkers(t.scope.replaceAll("{TON}", ton).replaceAll("{CITY}", city).replaceAll("{SYS}", sys).replaceAll("{AH_MODEL}", ahModel).replaceAll("{HP_MODEL}", hpModel));
   $("obsWrap").classList.toggle("hidden", !t.obs);
   if (t.obs) $("fObs").value = t.observation;
   if (t.docTitle.includes("INVOICE")) setDocType("Invoice");
@@ -448,88 +466,154 @@ async function draftScope(notes) {
   toast("✨ Drafting scope in Arkay style…", 8000);
   try {
     const d = await api("scope", { method: "POST", body: JSON.stringify({ action: "draft", text: notes, docType: DOC_TYPE, jobType: $("fJobType").value }) });
-    $("fScope").value = d.scope; autoGrow($("fScope"));
+    setScopeMarkers(d.scope);
     if (d.observation) { $("obsWrap").classList.remove("hidden"); $("fObs").value = d.observation; }
     toast("Scope drafted — review and edit");
   } catch (e) { toast("AI error: " + e.message); }
 }
-function draftFromNotes() { const t = $("fScope").value.trim(); if (!t) return toast("Type rough notes in the scope box first"); draftScope(t); }
+function draftFromNotes() { const t = getScopeMarkers().trim(); if (!t) return toast("Type rough notes in the scope box first"); draftScope(t); }
 async function translateScope() {
-  const t = $("fScope").value.trim(); if (!t) return toast("Nothing to translate");
+  const t = getScopeMarkers().trim(); if (!t) return toast("Nothing to translate");
   toast("🇪🇸 Translating…", 8000);
-  try { const d = await api("scope", { method: "POST", body: JSON.stringify({ action: "translate", text: t, docType: DOC_TYPE }) }); $("fScope").value = d.scope; $("scopeLang").textContent = "(Español)"; toast("Translated"); }
+  try { const d = await api("scope", { method: "POST", body: JSON.stringify({ action: "translate", text: t, docType: DOC_TYPE }) }); setScopeMarkers(d.scope); $("scopeLang").textContent = "(Español)"; toast("Translated"); }
   catch (e) { toast("AI error: " + e.message); }
 }
 
 /* =============== PREVIEW + GENERATE =============== */
-/* =============== SCOPE FORMATTING ENGINE ===============
-   Line rules: ALL-CAPS ending ":" = bold header with green bullet
-   "- " or "o " prefix = indented hollow sub-bullet
-   anything else = solid bullet   |  **bold**  *italic*            */
-function parseScope(text) {
-  return text.split("\n").map((raw) => {
+/* =============== SCOPE ENGINE (rich editor <-> preview <-> Word) =============== */
+const KCLS = { head: "lh", main: "lm", sub: "ls", gap: "lg" };
+const CLSK = { lh: "head", lm: "main", ls: "sub", lg: "gap" };
+function escH(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function xesc(s) { return escH(s).replace(/"/g, "&quot;"); }
+
+function parseInline(s) {
+  const runs = [];
+  for (const p of s.split(/(\*\*.+?\*\*|\*[^*]+?\*)/g).filter(Boolean)) {
+    let t = p, b = false, i = false;
+    if (/^\*\*.+\*\*$/.test(p)) { t = p.slice(2, -2); b = true; }
+    else if (/^\*[^*]+\*$/.test(p)) { t = p.slice(1, -1); i = true; }
+    runs.push({ t, b, i });
+  }
+  return runs;
+}
+function markersToLines(text) {
+  return (text || "").split("\n").map((raw) => {
     const line = raw.replace(/^[·•]\s*/, "").trimEnd();
     const t = line.trim();
-    if (!t) return { kind: "gap" };
-    if (/^#/.test(t)) { let h = t.replace(/^#\s*/, "").toUpperCase(); if (!h.endsWith(":")) h += ":"; return { kind: "head", text: h }; }
-    if (/^[^a-z]{4,}:$/.test(t)) return { kind: "head", text: t };
-    if (/^(-|o)\s+/.test(t)) return { kind: "sub", text: t.replace(/^(-|o)\s+/, "") };
-    return { kind: "main", text: t };
+    if (!t) return { kind: "gap", runs: [] };
+    if (/^#/.test(t)) { let h = t.replace(/^#\s*/, "").toUpperCase(); if (!h.endsWith(":")) h += ":"; return { kind: "head", runs: parseInline(h) }; }
+    if (/^[^a-z]{4,}:$/.test(t)) return { kind: "head", runs: parseInline(t) };
+    if (/^(-|o)\s+/.test(t)) return { kind: "sub", runs: parseInline(t.replace(/^(-|o)\s+/, "")) };
+    return { kind: "main", runs: parseInline(t) };
   });
 }
-function inlineHtml(s) {
-  s = s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-  return s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
+function runsToHtml(runs) {
+  const h = runs.map((r) => { let x = escH(r.t); if (r.i) x = "<i>" + x + "</i>"; if (r.b) x = "<b>" + x + "</b>"; return x; }).join("");
+  return h || "<br>";
 }
-function scopeToHtml(text) {
-  const lines = parseScope(text);
+function linesToEditorHtml(lines) { return lines.map((l) => `<div class="${KCLS[l.kind]}">${l.kind === "gap" ? "<br>" : runsToHtml(l.runs)}</div>`).join(""); }
+function setScopeMarkers(text) { $("fScope").innerHTML = linesToEditorHtml(markersToLines(text)); }
+function appendScopeMarkers(text) { $("fScope").innerHTML += linesToEditorHtml(markersToLines(text)); }
+function normalizeEditor() {
+  const ed = $("fScope");
+  [...ed.childNodes].forEach((n) => {
+    if (n.nodeType === 3) {
+      if (!n.textContent.trim()) { n.remove(); return; }
+      const d = document.createElement("div"); d.className = "lm"; n.replaceWith(d); d.appendChild(n);
+    } else if (n.nodeType === 1) {
+      if (n.tagName === "BR") { const d = document.createElement("div"); d.className = "lg"; d.innerHTML = "<br>"; n.replaceWith(d); return; }
+      if (!CLSK[[...n.classList].find((c) => CLSK[c]) || ""]) n.className = "lm";
+    }
+  });
+}
+function editorToLines() {
+  normalizeEditor();
+  const out = [];
+  [...$("fScope").children].forEach((n) => {
+    const kind = CLSK[[...n.classList].find((c) => CLSK[c])] || "main";
+    const runs = [];
+    (function walk(node, b, i) {
+      node.childNodes.forEach((c) => {
+        if (c.nodeType === 3) { if (c.textContent) runs.push({ t: c.textContent, b, i }); }
+        else if (c.nodeType === 1 && c.tagName !== "BR") {
+          const st = c.style || {};
+          walk(c, b || c.tagName === "B" || c.tagName === "STRONG" || st.fontWeight === "bold" || +st.fontWeight >= 600,
+                  i || c.tagName === "I" || c.tagName === "EM" || st.fontStyle === "italic");
+        }
+      });
+    })(n, false, false);
+    const hasText = runs.some((r) => r.t.trim());
+    out.push(hasText ? { kind, runs } : { kind: "gap", runs: [] });
+  });
+  return out;
+}
+function linesToMarkers(lines) {
+  return lines.map((l) => {
+    if (l.kind === "gap") return "";
+    const txt = l.runs.map((r) => { let t = r.t; if (r.b) t = "**" + t + "**"; if (r.i) t = "*" + t + "*"; return t; }).join("");
+    if (l.kind === "head") return "# " + txt.replace(/:$/, "");
+    if (l.kind === "sub") return "- " + txt;
+    return txt;
+  }).join("\n");
+}
+function getScopeMarkers() { return linesToMarkers(editorToLines()); }
+function linesToHtml(lines) {
   return lines.map((l, i) => {
     const prev = lines[i - 1] || {}, next = lines[i + 1] || {};
     if (l.kind === "gap") return '<div style="height:12px"></div>';
-    if (l.kind === "head") return `<div style="font-weight:800;margin:${i ? 16 : 2}px 0 8px"><span style="color:var(--green)">●</span> ${inlineHtml(l.text)}</div>`;
+    const txt = runsToHtml(l.runs);
+    if (l.kind === "head") return `<div style="font-weight:800;margin:${i ? 16 : 2}px 0 8px"><span style="color:var(--green)">●</span> ${txt}</div>`;
     if (l.kind === "sub") {
       const mt = prev.kind !== "sub" ? "margin-top:10px;" : "";
       const mb = next.kind !== "sub" ? "margin-bottom:12px;" : "margin-bottom:3px;";
-      return `<div style="margin-left:104px;text-indent:-16px;${mt}${mb}">o&nbsp;&nbsp; ${inlineHtml(l.text)}</div>`;
+      return `<div style="margin-left:104px;text-indent:-16px;${mt}${mb}">o&nbsp;&nbsp; ${txt}</div>`;
     }
-    return `<div style="margin-left:46px;text-indent:-15px;margin-bottom:4px">•&nbsp;&nbsp; ${inlineHtml(l.text)}</div>`;
+    return `<div style="margin-left:46px;text-indent:-15px;margin-bottom:4px">•&nbsp;&nbsp; ${txt}</div>`;
   }).join("");
 }
-function xesc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function inlineRuns(s, baseBold, baseItal) {
-  // split on **bold** and *italic*, emit w:r runs
-  const out = [];
-  const parts = s.split(/(\*\*.+?\*\*|\*[^*]+?\*)/g).filter(Boolean);
-  for (const p of parts) {
-    let txt = p, b = baseBold, i = baseItal;
-    if (/^\*\*.+\*\*$/.test(p)) { txt = p.slice(2, -2); b = true; }
-    else if (/^\*[^*]+\*$/.test(p)) { txt = p.slice(1, -1); i = true; }
-    out.push(`<w:r><w:rPr>${b?"<w:b/>":""}${i?"<w:i/>":""}</w:rPr><w:t xml:space="preserve">${xesc(txt)}</w:t></w:r>`);
-  }
-  return out.join("");
-}
-function scopeToXml(text) {
-  const lines = parseScope(text);
+function runsToXml(runs) { return runs.map((r) => `<w:r><w:rPr>${r.b ? "<w:b/>" : ""}${r.i ? "<w:i/>" : ""}</w:rPr><w:t xml:space="preserve">${xesc(r.t)}</w:t></w:r>`).join(""); }
+function linesToXml(lines) {
   return lines.map((l, i) => {
     const prev = lines[i - 1] || {}, next = lines[i + 1] || {};
     if (l.kind === "gap") return '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>';
-    if (l.kind === "head") return `<w:p><w:pPr><w:spacing w:before="${i ? 200 : 40}" w:after="100"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="6DBE45"/></w:rPr><w:t xml:space="preserve">●  </w:t></w:r>${inlineRuns(l.text, true, false)}</w:p>`;
+    if (l.kind === "head") return `<w:p><w:pPr><w:spacing w:before="${i ? 200 : 40}" w:after="100"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="6DBE45"/></w:rPr><w:t xml:space="preserve">●  </w:t></w:r>${runsToXml(l.runs.map((r) => ({ ...r, b: true })))}</w:p>`;
     if (l.kind === "sub") {
       const before = prev.kind !== "sub" ? ' w:before="140"' : "";
       const after = next.kind !== "sub" ? "160" : "40";
-      return `<w:p><w:pPr><w:ind w:left="2160" w:hanging="330"/><w:spacing${before} w:after="${after}"/></w:pPr><w:r><w:t xml:space="preserve">o    </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
+      return `<w:p><w:pPr><w:ind w:left="2160" w:hanging="330"/><w:spacing${before} w:after="${after}"/></w:pPr><w:r><w:t xml:space="preserve">o    </w:t></w:r>${runsToXml(l.runs)}</w:p>`;
     }
-    return `<w:p><w:pPr><w:ind w:left="1030" w:hanging="310"/><w:spacing w:after="60"/></w:pPr><w:r><w:t xml:space="preserve">•   </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
-  }).join("");
+    return `<w:p><w:pPr><w:ind w:left="1030" w:hanging="310"/><w:spacing w:after="60"/></w:pPr><w:r><w:t xml:space="preserve">•   </w:t></w:r>${runsToXml(l.runs)}</w:p>`;
+  }).join("") || "<w:p/>";
 }
-
+/* ---- toolbar ---- */
+function scopeBlocks() {
+  const sel = window.getSelection(); if (!sel.rangeCount) return [];
+  const ed = $("fScope");
+  const blk = (n) => { while (n && n.parentNode !== ed) n = n.parentNode; return n; };
+  let a = blk(sel.anchorNode), f = blk(sel.focusNode);
+  a = a || f; f = f || a; if (!a) return [];
+  const kids = [...ed.children];
+  let i1 = kids.indexOf(a), i2 = kids.indexOf(f);
+  if (i1 > i2) [i1, i2] = [i2, i1];
+  return kids.slice(Math.max(i1, 0), i2 + 1);
+}
+function setLine(k) {
+  normalizeEditor();
+  const bs = scopeBlocks();
+  if (!bs.length) { toast("Tap into a line first, then choose a style"); return; }
+  bs.forEach((b) => {
+    b.className = KCLS[k];
+    if (k === "head") { const t = b.innerText.trim().toUpperCase().replace(/:+$/, ""); b.innerHTML = escH(t ? t + ":" : ""); if (!t) b.innerHTML = "<br>"; }
+  });
+  $("fScope").focus();
+}
+function fmt(cmd) { document.execCommand(cmd, false, null); $("fScope").focus(); }
 
 function docTitle() { const t = TEMPLATES[$("fJobType").value]; if (DOC_TYPE === "Invoice") return ($("fJobType").value === "HERS Testing & Certificate Production") ? "HERS INVOICE" : "INVOICE"; return t ? t.docTitle : "PROPOSAL"; }
 function fullAddress() { return [$("fAddr").value, $("fCity").value ? $("fCity").value + ", CA" : ""].filter(Boolean).join(", "); }
 function amountStr() { const a = parseFloat($("fAmount").value); return isNaN(a) ? "$0.00" : "$" + a.toLocaleString("en-US", { minimumFractionDigits: 2 }); }
 
 function preview() {
-  autoGrow($("fScope"));
   const t = TEMPLATES[$("fJobType").value] || {};
   const hasObs = !$("obsWrap").classList.contains("hidden") && $("fObs").value.trim();
   $("docPreview").innerHTML = `
@@ -541,9 +625,9 @@ function preview() {
       <tr><td>Client Name:</td><td>${$("fClient").value || "—"}</td></tr>
       <tr><td>Property Address:</td><td>${fullAddress() || "—"}</td></tr>
     </table>
-    ${hasObs ? `<div class="bar">OBSERVATION AND RECOMMENDATION</div><div class="box">${scopeToHtml($("fObs").value)}</div>` : ""}
+    ${hasObs ? `<div class="bar">OBSERVATION AND RECOMMENDATION</div><div class="box">${linesToHtml(markersToLines($("fObs").value))}</div>` : ""}
     <div class="bar">${DOC_TYPE === "Invoice" ? "DESCRIPTION OF WORK" : "SCOPE OF WORK"}</div>
-    <div class="box">${scopeToHtml($("fScope").value) || "—"}</div>
+    <div class="box">${linesToHtml(editorToLines()) || "—"}</div>
     <div class="bar">${DOC_TYPE === "Invoice" ? "AMOUNT DUE" : "TOTAL INVESTMENT"}</div>
     <div class="tot"><div>${DOC_TYPE === "Invoice" ? "Amount Due" : "Total Investment"}</div><div>${amountStr()}</div></div>
     <div class="note">${DOC_TYPE === "Invoice" ? "Amount due includes ALL labor and materials for the work described above.<br>Thank you for your business — payment is appreciated within 15 days of the invoice date." : "Total investment includes ALL labor and materials necessary to complete the scope of work listed above."}</div>
@@ -585,12 +669,12 @@ async function buildDocx() {
       doc.render(isInv ? {
         Title: t.title || $("fJobType").value, InvoiceNo: $("fNum").value, Date: dateStr,
         ClientName: $("fClient").value, PropertyAddress: fullAddress(),
-        DescriptionXml: scopeToXml($("fScope").value), AmountDue: amountStr(),
+        DescriptionXml: linesToXml(editorToLines()), AmountDue: amountStr(),
       } : {
         DocTitle: docTitle(), Title: t.title || $("fJobType").value, NoLabel: "Proposal No", DocNo: $("fNum").value,
         Date: dateStr, ClientName: $("fClient").value, PropertyAddress: fullAddress(),
-        HasObservation: !!hasObs, ObservationXml: hasObs ? scopeToXml($("fObs").value) : "<w:p/>",
-        ScopeXml: scopeToXml($("fScope").value), TotalInvestment: amountStr(),
+        HasObservation: !!hasObs, ObservationXml: hasObs ? linesToXml(markersToLines($("fObs").value)) : "<w:p/>",
+        ScopeXml: linesToXml(editorToLines()), TotalInvestment: amountStr(),
         Notes: [],
       });
   return doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
@@ -635,7 +719,7 @@ async function saveRecord() {
       doc_number: $("fNum").value, doc_type: DOC_TYPE, client: $("fClient").value,
       property_address: fullAddress(), city: $("fCity").value, job_type: $("fJobType").value,
       amount: parseFloat($("fAmount").value) || null, doc_date: $("fDate").value,
-      scope_text: $("fScope").value, language: $("scopeLang").textContent ? "es" : "en",
+      scope_text: getScopeMarkers(), language: $("scopeLang").textContent ? "es" : "en",
       converted_from: window._convertedFrom || null,
     }) });
     loadJobs();
@@ -676,7 +760,7 @@ async function convert(docNumber) {
   try { const { next_number } = await api("jobs?action=next-number"); $("fNum").value = next_number; } catch (e) {}
   // pull scope from the original record
   const rec = ALL_JOBS.find((x) => x.doc_number === docNumber);
-  if (rec && rec.scope_text) $("fScope").value = rec.scope_text;
+  if (rec && rec.scope_text) setScopeMarkers(rec.scope_text);
   showTab("new"); toast(`Converting ${docNumber} → Invoice`);
 }
 
