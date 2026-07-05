@@ -142,6 +142,7 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
       <textarea id="fObs" style="min-height:110px"></textarea>
     </div>
     <label>Scope <span id="scopeLang" style="color:var(--green)"></span></label>
+    <div style="font-size:12px;color:#888;margin:0 0 6px;line-height:1.5">Header: start line with <b>#</b> (or ALL CAPS ending in ":") &nbsp;·&nbsp; Sub-bullet: start with <b>-</b> &nbsp;·&nbsp; <b>**bold**</b> &nbsp;·&nbsp; <i>*italic*</i></div>
     <textarea id="fScope" placeholder="Pick a job type to auto-fill, dictate with the mic, or type here."></textarea>
     <div class="row">
       <button class="btn btn-outline" onclick="translateScope()">🇪🇸 Español</button>
@@ -154,6 +155,7 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
     <div id="docPreview" style="margin-top:14px"></div>
     <button class="btn btn-green" onclick="generatePDF()">⬇ Generate PDF + Log</button>
     <button class="btn btn-outline" onclick="generate('docx')">⬇ Generate Word + Save to Dropbox</button>
+    <button class="btn btn-black" onclick="sendDoc()">📤 Send to Client</button>
   </div>
 </section>
 
@@ -469,6 +471,7 @@ function parseScope(text) {
     const line = raw.replace(/^[·•]\s*/, "").trimEnd();
     const t = line.trim();
     if (!t) return { kind: "gap" };
+    if (/^#/.test(t)) { let h = t.replace(/^#\s*/, "").toUpperCase(); if (!h.endsWith(":")) h += ":"; return { kind: "head", text: h }; }
     if (/^[^a-z]{4,}:$/.test(t)) return { kind: "head", text: t };
     if (/^(-|o)\s+/.test(t)) return { kind: "sub", text: t.replace(/^(-|o)\s+/, "") };
     return { kind: "main", text: t };
@@ -558,13 +561,8 @@ function generatePDF() {
   toast("In the print box, choose 'Save as PDF'", 6000);
 }
 
-async function generate(kind) {
-  preview();
-  toast("Generating…", 10000);
-  try {
-    let blob;
-    {
-      const isInv = DOC_TYPE === "Invoice";
+async function buildDocx() {
+  const isInv = DOC_TYPE === "Invoice";
       const tplPath = isInv ? "templates/Arkay_Invoice_Template.docx" : "templates/Arkay_Proposal_Template.docx";
       const buf = await (await fetch(tplPath)).arrayBuffer();
       const zip = new PizZip(buf);
@@ -583,15 +581,40 @@ async function generate(kind) {
         ScopeXml: scopeToXml($("fScope").value), TotalInvestment: amountStr(),
         Notes: [],
       });
-      blob = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-    }
-    // download
+  return doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+async function generate(kind) {
+  preview();
+  toast("Generating…", 10000);
+  try {
+    const blob = await buildDocx();
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename("docx"); a.click();
-    // save record + Dropbox
     await saveRecord();
     dropboxSave(blob, "docx");
     toast("✅ Generated, logged & saving to Dropbox");
   } catch (e) { toast("Error: " + e.message, 5000); }
+}
+
+async function sendDoc() {
+  preview();
+  toast("Preparing to send…", 8000);
+  try {
+    const blob = await buildDocx();
+    const file = new File([blob], filename("docx"), { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    const msg = `${DOC_TYPE} No.${$("fNum").value} — ${fullAddress()} — Total: ${amountStr()}\n\nPlease see the attached ${DOC_TYPE.toLowerCase()} from Arkay Energy Solutions. Reply here or call (408) 218-7956 with any questions.\n\nThank you,\nArkay Energy Solutions`;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename("docx"), text: msg });
+      await saveRecord(); dropboxSave(blob, "docx");
+      toast("✅ Sent, logged & saved to Dropbox");
+    } else {
+      // Desktop fallback: download the file, open a pre-written email
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename("docx"); a.click();
+      await saveRecord(); dropboxSave(blob, "docx");
+      location.href = `mailto:?subject=${encodeURIComponent(DOC_TYPE + " No." + $("fNum").value + " — " + fullAddress() + " — Arkay Energy Solutions")}&body=${encodeURIComponent(msg)}`;
+      toast("File downloaded — attach it to the email that just opened", 7000);
+    }
+  } catch (e) { if (e.name !== "AbortError") toast("Error: " + e.message, 5000); }
 }
 
 async function saveRecord() {
