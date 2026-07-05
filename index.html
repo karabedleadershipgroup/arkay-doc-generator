@@ -636,6 +636,8 @@ function preview() {
     <div class="dfoot">Arkay Energy Solutions&nbsp; | &nbsp;General & Mechanical Contractor, Certified Title-24 HVAC Testing&nbsp; | &nbsp;Campbell, CA<br><i>This ${DOC_TYPE.toLowerCase()} is confidential and intended for the named property. Reproduction without consent is prohibited.</i></div>`;
   $("previewWrap").classList.remove("hidden");
   $("docPreview").scrollIntoView({ behavior: "smooth" });
+  _docxCache = null;
+  buildDocx().then((b) => { _docxCache = b; }).catch(() => {});
 }
 
 function filename(ext) {
@@ -692,25 +694,35 @@ async function generate(kind) {
   } catch (e) { toast("Error: " + e.message, 5000); }
 }
 
+let _docxCache = null;
 async function sendDoc() {
-  preview();
-  toast("Preparing to send…", 8000);
+  const msg = `${DOC_TYPE} No.${$("fNum").value} — ${fullAddress()} — Total: ${amountStr()}\n\nPlease see the attached ${DOC_TYPE.toLowerCase()} from Arkay Energy Solutions. Reply here or call (408) 218-7956 with any questions.\n\nThank you,\nArkay Energy Solutions`;
   try {
-    const blob = await buildDocx();
-    const file = new File([blob], filename("docx"), { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-    const msg = `${DOC_TYPE} No.${$("fNum").value} — ${fullAddress()} — Total: ${amountStr()}\n\nPlease see the attached ${DOC_TYPE.toLowerCase()} from Arkay Energy Solutions. Reply here or call (408) 218-7956 with any questions.\n\nThank you,\nArkay Energy Solutions`;
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: filename("docx"), text: msg });
-      await saveRecord(); dropboxSave(blob, "docx");
-      toast("✅ Sent, logged & saved to Dropbox");
-    } else {
-      // Desktop fallback: download the file, open a pre-written email
-      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename("docx"); a.click();
-      await saveRecord(); dropboxSave(blob, "docx");
-      location.href = `mailto:?subject=${encodeURIComponent(DOC_TYPE + " No." + $("fNum").value + " — " + fullAddress() + " — Arkay Energy Solutions")}&body=${encodeURIComponent(msg)}`;
-      toast("File downloaded — attach it to the email that just opened", 7000);
+    if (!_docxCache) {
+      toast("Preparing document…", 3000);
+      _docxCache = await buildDocx();
+      toast("Ready — tap Send again", 5000);
+      return;
     }
-  } catch (e) { if (e.name !== "AbortError") toast("Error: " + e.message, 5000); }
+    const blob = _docxCache;
+    const file = new File([blob], filename("docx"), { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename("docx"), text: msg });
+        await saveRecord(); dropboxSave(blob, "docx");
+        toast("✅ Sent, logged & saved to Dropbox");
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return; // user closed the share sheet — not an error
+        // NotAllowedError / anything else → fall through to email fallback
+      }
+    }
+    // Fallback (desktop or share blocked): download + pre-written email
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = filename("docx"); a.click();
+    await saveRecord(); dropboxSave(blob, "docx");
+    location.href = `mailto:?subject=${encodeURIComponent(DOC_TYPE + " No." + $("fNum").value + " — " + fullAddress() + " — Arkay Energy Solutions")}&body=${encodeURIComponent(msg)}`;
+    toast("File downloaded — attach it to the email that just opened", 7000);
+  } catch (e) { toast("Error: " + e.message, 5000); }
 }
 
 async function saveRecord() {
