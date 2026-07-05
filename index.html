@@ -150,6 +150,10 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
   <div class="card">
     <h3>Scope of Work</h3>
     <button class="mic" id="micBtn" onclick="toggleMic()">🎤 <span id="micLabel">Dictate from the job site — AI drafts it in Arkay style</span></button>
+    <div id="hersWrap" class="hidden">
+      <label>HERS Certifications <span style="color:var(--green);font-weight:600">(prints as its own section under the scope)</span></label>
+      <textarea id="fHers" style="min-height:150px"></textarea>
+    </div>
     <div id="obsWrap" class="hidden">
       <label>Observation & Recommendation (repair proposals)</label>
       <textarea id="fObs" style="min-height:110px"></textarea>
@@ -425,6 +429,7 @@ function showTab(t) {
 function applyTemplate() {
   const jt = $("fJobType").value;
   WA = {}; _extraNotes = [];
+  $("fHers").value = ""; $("hersWrap").classList.add("hidden");
   renderWizard();
   const t = TEMPLATES[jt];
   if (!t) return;
@@ -549,7 +554,12 @@ function universalTail(a, L) {
   L.push("Ensure all work complies with the " + ($("fCity").value || "[CITY]") + " City Codes & Regulations");
   L.push("Clean up the work area and remove all debris and materials upon completion");
   _extraNotes = a.permits === "Excluded" ? ["Total investment does NOT include any permits or city fees that might be associated with the scope of work."] : [];
-  if (a.hers === "Yes") L.push("", ...hersResidentialBlock(parseInt(a.sys || "1"), true));
+  if (a.hers === "Yes") {
+    $("fHers").value = hersResidentialBlock(parseInt(a.sys || "1"), true).slice(1).join("\n");
+    $("hersWrap").classList.remove("hidden");
+  } else {
+    $("fHers").value = ""; $("hersWrap").classList.add("hidden");
+  }
 }
 function hersResidentialBlock(n, hasAC) {
   const L = ["# HERS TESTING & CERTIFICATE PRODUCTION"];
@@ -874,6 +884,7 @@ function preview() {
     ${hasObs ? `<div class="bar">OBSERVATION AND RECOMMENDATION</div><div class="box">${linesToHtml(markersToLines($("fObs").value))}</div>` : ""}
     <div class="bar">${DOC_TYPE === "Invoice" ? "DESCRIPTION OF WORK" : "SCOPE OF WORK"}</div>
     <div class="box">${linesToHtml(editorToLines()) || "—"}</div>
+    ${$("fHers").value.trim() && !$("hersWrap").classList.contains("hidden") ? `<div class="bar">HERS CERTIFICATIONS</div><div class="box">${linesToHtml(markersToLines($("fHers").value))}</div>` : ""}
     <div class="bar">${DOC_TYPE === "Invoice" ? "AMOUNT DUE" : "TOTAL INVESTMENT"}</div>
     <div class="tot"><div>${DOC_TYPE === "Invoice" ? "Amount Due" : "Total Investment"}</div><div>${amountStr()}</div></div>
     <div class="note">${DOC_TYPE === "Invoice" ? "Amount due includes ALL labor and materials for the work described above.<br>Thank you for your business — payment is appreciated within 15 days of the invoice date." : "Total investment includes ALL labor and materials necessary to complete the scope of work listed above."}</div>${(_extraNotes || []).map((n) => `<div class="note">${n}</div>`).join("")}
@@ -922,6 +933,8 @@ async function buildDocx() {
         DocTitle: docTitle(), Title: t.title || $("fJobType").value, NoLabel: "Proposal No", DocNo: $("fNum").value,
         Date: dateStr, ClientName: $("fClient").value, PropertyAddress: fullAddress(),
         HasObservation: !!hasObs, ObservationXml: hasObs ? linesToXml(markersToLines($("fObs").value)) : "<w:p/>",
+        HasHers: !!($("fHers").value.trim() && !$("hersWrap").classList.contains("hidden")),
+        HersXml: $("fHers").value.trim() ? linesToXml(markersToLines($("fHers").value)) : "<w:p/>",
         ScopeXml: linesToXml(editorToLines()), TotalInvestment: amountStr(),
         Notes: _extraNotes || [],
       });
