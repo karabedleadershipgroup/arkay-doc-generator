@@ -19,7 +19,8 @@ House style rules — follow exactly:
 - Standard Bryant lineup: 45MUAAQ48XX3 (4-Ton Air Handler), 45MUAAQ60XX3 (5-Ton Air Handler), 37MURAQ48 (4-Ton Heat Pump), 37MURAQ60 (5-Ton Heat Pump).
 - Always end install scopes with cleanup: "· Clean up the work area and remove all debris and materials upon completion".
 - Never invent prices, model numbers, or measurements the dictation didn't give — leave [BRACKETED PLACEHOLDERS] for anything missing.
-- Section headers in ALL CAPS ending with a colon.`;
+- Section headers in ALL CAPS ending with a colon.
+- Formatting markers (the app renders these): lines starting "- " become indented sub-bullets (use for room lists, spec lines like U-Factor/SHGC, and equipment details under an Install line); wrap key phrases the client should notice in **double asterisks** to bold them (equipment names, "Remove and dispose of", counts like "6 New Custom...").`;
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers };
