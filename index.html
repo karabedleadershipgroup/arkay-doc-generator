@@ -143,7 +143,11 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
     <label>Client Name</label><input id="fClient" placeholder="e.g. Brooke Shaw Builders">
     <label>Property Address</label><input id="fAddr" placeholder="e.g. 855 Park Drive">
     <div class="row">
-      <div><label>City</label><input id="fCity" placeholder="e.g. Mountain View"></div>
+      <div style="flex:2"><label>City</label><input id="fCity" placeholder="e.g. Mountain View"></div>
+      <div><label>State</label><input id="fState" value="CA" maxlength="2" style="text-transform:uppercase"></div>
+      <div><label>Zip</label><input id="fZip" inputmode="numeric" placeholder="95008"></div>
+    </div>
+    <div class="row">
       <div><label>Investment ($)</label><input id="fAmount" inputmode="decimal" placeholder="0.00"></div>
     </div>
   </div>
@@ -372,7 +376,7 @@ scope:
 · CF3R MCH-22
 · CF3R MCH-23
 · CF3R MCH-27
-· Register all certificates with CalCERTS and provide copies for permit final` },
+· Register all certificates with CHEERS and provide copies for permit final` },
 
 "Insulation": { title: "Insulation", docTitle: "INSULATION PROPOSAL", obs: false, scope:
 `CRAWLSPACE / ATTIC INSULATION:
@@ -607,7 +611,7 @@ function hersResidentialBlock(n, hasAC) {
   ["DUCT LEAKAGE","RETURN AIR-FLOW","WATT DRAW","REFRIGERANT CHARGE","MECHANICAL VENTILATION"].forEach((t) => { if (!(t === "REFRIGERANT CHARGE" && !hasAC)) L.push("- " + t); });
   L.push(`Produce the following HERS Certifications for the passing HVAC System${n > 1 ? "s" : ""}:`);
   ["CF2R-MCH-01","CF3R-MCH-20","CF3R-MCH-22","CF3R-MCH-23","CF3R-MCH-27"].forEach((c) => { if (!hasAC && !["CF2R-MCH-01","CF3R-MCH-20"].includes(c)) return; L.push("- " + c); });
-  L.push("Register all certificates with CalCERTS and provide copies for permit final");
+  L.push("Register all certificates with CHEERS and provide copies for permit final");
   return L;
 }
 function buildHP(a) {
@@ -735,7 +739,7 @@ function buildHERS(a) {
     const L = ["# HERS TESTING & CERTIFICATE PRODUCTION — NEW CONSTRUCTION"];
     L.push(`Perform the required HERS Tests and Verifications on ${n} system${n > 1 ? "s" : ""} and produce the following certificates per system:`);
     (hasAC ? ["CF2R-MCH-01","CF3R-MCH-20","CF3R-MCH-22","CF3R-MCH-23","CF3R-MCH-26","CF3R-MCH-27","CF3R-MCH-32"] : ["CF2R-MCH-01","CF3R-MCH-20"]).forEach((c) => L.push("- " + c));
-    L.push("Register all certificates with CalCERTS and provide copies for permit final");
+    L.push("Register all certificates with CHEERS and provide copies for permit final");
     _extraNotes = [];
     return L.join("\n");
   }
@@ -915,10 +919,19 @@ function setLine(k) {
 function fmt(cmd) { document.execCommand(cmd, false, null); $("fScope").focus(); }
 
 function docTitle() { const t = TEMPLATES[$("fJobType").value]; if (DOC_TYPE === "Invoice") return ($("fJobType").value === "HERS Testing & Certificate Production") ? "HERS INVOICE" : "INVOICE"; return t ? t.docTitle : "PROPOSAL"; }
-function fullAddress() { return [$("fAddr").value, $("fCity").value ? $("fCity").value + ", CA" : ""].filter(Boolean).join(", "); }
+function fullAddress() {
+  const sz = [($("fState").value || "").toUpperCase(), $("fZip").value].filter(Boolean).join(" ");
+  return [$("fAddr").value, $("fCity").value, sz].filter(Boolean).join(", ");
+}
 function amountStr() { const a = parseFloat($("fAmount").value); return isNaN(a) ? "$0.00" : "$" + a.toLocaleString("en-US", { minimumFractionDigits: 2 }); }
 
 function preview() {
+  const cityVal = $("fCity").value.trim();
+  if (cityVal) {
+    $("fScope").innerHTML = $("fScope").innerHTML.replaceAll("[CITY]", cityVal);
+    $("fObs").value = $("fObs").value.replaceAll("[CITY]", cityVal);
+    $("fHers").value = $("fHers").value.replaceAll("[CITY]", cityVal);
+  }
   const t = TEMPLATES[$("fJobType").value] || {};
   const hasObs = !$("obsWrap").classList.contains("hidden") && $("fObs").value.trim();
   $("docPreview").innerHTML = `
