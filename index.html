@@ -143,14 +143,8 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
     <label>Property Address</label><input id="fAddr" placeholder="e.g. 855 Park Drive">
     <div class="row">
       <div><label>City</label><input id="fCity" placeholder="e.g. Mountain View"></div>
-      <div><label>Amount ($)</label><input id="fAmount" inputmode="decimal" placeholder="0.00"></div>
+      <div><label>Investment ($)</label><input id="fAmount" inputmode="decimal" placeholder="0.00"></div>
     </div>
-    <div class="row" id="jobFields">
-      <div><label>Tonnage</label><select id="fTon"><option>—</option><option>2</option><option>2.5</option><option>3</option><option>3.5</option><option>4</option><option>5</option></select></div>
-      <div><label># Systems</label><select id="fSys"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
-    </div>
-    <label>Equipment Quick-Picks (Bryant lineup)</label>
-    <div class="chips" id="equipChips"></div>
   </div>
 
   <div class="card">
@@ -411,7 +405,6 @@ async function init() {
   $("fDate").value = new Date().toISOString().slice(0, 10);
   const sel = $("fJobType");
   Object.keys(TEMPLATES).forEach((k) => { const o = document.createElement("option"); o.value = o.textContent = k; sel.appendChild(o); });
-  EQUIPMENT.forEach((e) => { const b = document.createElement("button"); b.textContent = e.label; b.onclick = () => { appendScopeMarkers(e.text); }; $("equipChips").appendChild(b); });
   try { const { next_number } = await api("jobs?action=next-number"); $("fNum").value = next_number; } catch (e) { toast("Numbering offline: " + e.message); }
   loadJobs();
 }
@@ -435,17 +428,16 @@ function applyTemplate() {
   renderWizard();
   const t = TEMPLATES[jt];
   if (!t) return;
-  if (WIZARDS[jt]) { $("obsWrap").classList.add("hidden"); priceIntel(jt); return; }
-  const ton = $("fTon").value !== "—" ? $("fTon").value : "[TONNAGE]";
-  const sys = $("fSys").value;
+  if (WIZARDS[jt]) { $("obsWrap").classList.add("hidden"); priceIntel(jt); if ($("wizard").scrollIntoView) $("wizard").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  const ton = "[TONNAGE]", sys = "[# OF UNITS]";
   const city = $("fCity").value || "[CITY]";
-  const ahModel = ton === "4" ? "45MUAAQ48XX3" : ton === "5" ? "45MUAAQ60XX3" : "[AIR HANDLER MODEL]";
-  const hpModel = ton === "4" ? "37MURAQ48" : ton === "5" ? "37MURAQ60" : "[HEAT PUMP MODEL]";
+  const ahModel = "[AIR HANDLER MODEL]", hpModel = "[HEAT PUMP MODEL]";
   setScopeMarkers(t.scope.replaceAll("{TON}", ton).replaceAll("{CITY}", city).replaceAll("{SYS}", sys).replaceAll("{AH_MODEL}", ahModel).replaceAll("{HP_MODEL}", hpModel));
   $("obsWrap").classList.toggle("hidden", !t.obs);
   if (t.obs) $("fObs").value = t.observation;
   if (t.docTitle.includes("INVOICE")) setDocType("Invoice");
   priceIntel($("fJobType").value);
+  if ($("fScope").scrollIntoView) $("fScope").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function priceIntel(jobType) {
@@ -476,7 +468,7 @@ const NRCA = [
 const UNIVERSAL = [
   { id:"removal", label:"Removing existing equipment? (tap all)", multi:true, opts:["Furnace","AC Condenser","Air Handler","Ductwork","Nothing"] },
   { id:"tstat", label:"Thermostat type", opts:["Programmable","Smart (Ecobee/Nest)"] },
-  { id:"elec", label:"Electrical", opts:["Reuse existing circuit","New dedicated circuit"] },
+  { id:"elec", label:"Electrical", opts:["Reuse existing circuit","New dedicated circuit","To be performed by GC"] },
   { id:"lineset", label:"Line-set", opts:["New line-set","Reuse & flush existing"], showIf:(a)=>a._jt!=="furnace"||a.ac==="Yes" },
   { id:"permits", label:"Permits & city fees", opts:["Excluded","Included"] },
   { id:"hers", label:"Add HERS Testing & Certificates section?", opts:["Yes","No"] },
@@ -587,6 +579,7 @@ function buildHP(a) {
       L.push(`- *Model No.37MURAQ${code}*`);
       L.push(a.lineset === "Reuse & flush existing" ? "Flush and reuse the existing Line-Set between the Air Handler and the outdoor Heat Pump" : "Install a New Line-Set running from the newly installed Air Handler to the outdoor Heat Pump");
       if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
+      if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
       L.push("Install a Fusible Disconnect Box on the wall next to the New Heat Pump Condenser with the proper fuses");
       L.push("Ensure all exposed electrical wire is ran through conduit");
       L.push("Install New Primary and Secondary Condensate Drains on the newly installed Air Handler and drain pan");
@@ -621,6 +614,7 @@ function buildHP(a) {
     L.push(a.lineset === "Reuse & flush existing" ? "Flush and reuse the existing Line-Set(s)" : "Install Line-Set(s) running from each indoor unit to the outdoor Condenser");
     if (a.lscover === "Yes") L.push("Install Line-Set Cover to protect and conceal the exterior refrigerant lines");
     if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
+    if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
     L.push("Install a Fusible Disconnect Box on the wall next to the New Condenser with the proper fuses");
     L.push("Ensure all exposed electrical wire is ran through conduit");
     L.push("Install Condensate Drainage for each indoor unit, routed to the outside of the building");
@@ -651,6 +645,7 @@ function buildFurnace(a) {
       L.push("Charge the System with the New Refrigerant per manufacturer specification");
     }
     if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
+    if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
     L.push("Ensure all exposed electrical wire is ran through conduit");
     L.push("Install New Primary and Secondary Condensate Drains");
     L.push(`Ensure the duct distribution in the ${loc} is properly connected and sealed`);
