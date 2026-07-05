@@ -24,6 +24,7 @@ label { display:block; font-size:13px; font-weight:700; margin:12px 0 4px; color
 input, select, textarea { width:100%; padding:12px; border:1.5px solid #ccc; border-radius:8px; font-size:16px; font-family:inherit; background:#fff; }
 input:focus, select:focus, textarea:focus { outline:none; border-color:var(--green); }
 textarea { min-height:140px; line-height:1.5; font-size:15px; }
+.wsys { background:var(--black); color:var(--green); padding:7px 12px; border-radius:6px; font-weight:800; font-size:12px; letter-spacing:.7px; margin-top:16px; }
 .wq { margin-top:12px; }
 .wl { font-size:13px; font-weight:700; color:#333; margin-bottom:5px; }
 .wopts { display:flex; flex-wrap:wrap; gap:7px; }
@@ -456,11 +457,13 @@ async function priceIntel(jobType) {
 }
 
 
-/* =============== GUIDED INTERVIEW (Raffie's approved logic map v2) =============== */
+/* =============== GUIDED INTERVIEW (Raffie's approved logic map v2.1) =============== */
 let WA = {}, _extraNotes = [];
 const TONS = ["1","1.5","2","2.5","3","3.5","4","5"];
-const TONCODE = { "1":"12","1.5":"18","2":"24","2.5":"30","3":"36","3.5":"42","4":"48","5":"60" };
+const HPTONS = ["0.75","1","1.5","2","2.5","3","3.5","4","5"];
+const TONCODE = { "0.75":"09","1":"12","1.5":"18","2":"24","2.5":"30","3":"36","3.5":"42","4":"48","5":"60" };
 const DUCTLOC = ["Crawlspace","Attic","Conditioned Space"];
+const HEADLOC = ["Dining Room","Living Room","Family Room","Master Bedroom","Bedroom 1","Bedroom 2","Bedroom 3","Bedroom 4","Bedroom 5","Bedroom 6","Bedroom 7","Other"];
 const NRCA = [
   "NRCA-MCH-02-A — Outdoor Air","NRCA-MCH-03-A — Constant Volume Single Zone HVAC",
   "NRCA-MCH-04-H — Air Distribution Duct Leakage","NRCA-MCH-05-A — Air Economizer Controls",
@@ -472,43 +475,53 @@ const NRCA = [
 ];
 const UNIVERSAL = [
   { id:"removal", label:"Removing existing equipment? (tap all)", multi:true, opts:["Furnace","AC Condenser","Air Handler","Ductwork","Nothing"] },
-  { id:"tstat", label:"Thermostat type", opts:["Programmable","Smart (Ecobee/Nest)"] },
+  { id:"tstat", label:"Thermostat type", opts:["Programmable","Smart (Ecobee/Nest)","Wall Mounted Remote"] },
   { id:"elec", label:"Electrical", opts:["Reuse existing circuit","New dedicated circuit","To be performed by GC"] },
   { id:"lineset", label:"Line-set", opts:["New line-set","Reuse & flush existing"], showIf:(a)=>a._jt!=="furnace"||a.ac==="Yes" },
   { id:"permits", label:"Permits & city fees", opts:["Excluded","Included"] },
   { id:"hers", label:"Add HERS Testing & Certificates section?", opts:["Yes","No"] },
 ];
 const WIZARDS = {
-  "New HVAC System (Heat Pump)": [
-    { id:"sys", label:"How many systems?", opts:["1","2","3","4"] },
-    { id:"kind", label:"System type", opts:["Traditional Ducted","Mini-Split"] },
-    { id:"ton", label:"Tonnage — System {n}", opts:TONS, showIf:(a)=>a.kind==="Traditional Ducted", perCount:"sys" },
-    { id:"zones", label:"# of Zones (2+ triggers electronic dampers & zone control board)", opts:["1","2","3"], showIf:(a)=>a.kind==="Traditional Ducted" },
-    { id:"ductloc", label:"Duct location — System {n}", opts:DUCTLOC, showIf:(a)=>a.kind==="Traditional Ducted", perCount:"sys" },
-    { id:"strips", label:"Backup electric heat strips?", opts:["No","5 kW","10 kW","15 kW"], showIf:(a)=>a.kind==="Traditional Ducted" },
-    { id:"brand", label:"Mini-split brand", opts:["Bryant","Mitsubishi"], showIf:(a)=>a.kind==="Mini-Split" },
-    { id:"msMode", label:"Mini-split style", opts:["Ducted","Ductless","Both"], showIf:(a)=>a.kind==="Mini-Split" },
-    { id:"units", label:"# of indoor units", opts:["1","2","3","4","5","6"], showIf:(a)=>a.kind==="Mini-Split" },
-    { id:"headType", label:"Indoor unit type", opts:["Cassettes","High-Wall Heads","Both"], showIf:(a)=>a.kind==="Mini-Split"&&(a.msMode==="Ductless"||a.msMode==="Both") },
-    { id:"uKind", label:"Unit {n}: ducted or ductless?", opts:["Ducted","Ductless"], showIf:(a)=>a.kind==="Mini-Split"&&a.msMode==="Both", perCount:"units" },
-    { id:"uTon", label:"Unit {n} size (Tons)", opts:TONS, showIf:(a)=>a.kind==="Mini-Split"&&a.msMode==="Ducted", perCount:"units" },
-    { id:"uBtu", label:"Unit {n} size (kBTU)", opts:["6","9","12","18","24","30","36"], showIf:(a)=>a.kind==="Mini-Split"&&a.msMode!=="Ducted", perCount:"units" },
-    { id:"msDuctloc", label:"Duct location for ducted units", opts:DUCTLOC, showIf:(a)=>a.kind==="Mini-Split"&&a.msMode!=="Ductless" },
-    { id:"mount", label:"Condenser mounting", opts:["Ground Pad","Wall Bracket"], showIf:(a)=>a.kind==="Mini-Split" },
-    { id:"lscover", label:"Line-set cover on exterior runs?", opts:["Yes","No"], showIf:(a)=>a.kind==="Mini-Split" },
-    ...UNIVERSAL,
-  ],
-  "New Furnace & AC System": [
-    { id:"sys", label:"How many systems?", opts:["1","2","3","4"] },
-    { id:"zones", label:"# of Zones per system (2+ triggers electronic dampers & zone control board)", opts:["1","2","3"] },
-    { id:"ductloc", label:"Duct location — System {n}", opts:DUCTLOC, perCount:"sys" },
-    { id:"eff", label:"Furnace efficiency", opts:["80%","95%","96%+"] },
-    { id:"fsize", label:"Furnace size", opts:["2-Ton 40kBTU","3-Ton 40kBTU","3-Ton 60kBTU","3-Ton 70kBTU","4-Ton 80kBTU","4-Ton 90kBTU","5-Ton 100kBTU","5-Ton 110kBTU","5-Ton 120kBTU"] },
-    { id:"floc", label:"Furnace location", opts:["Attic","Interior Closet","Garage","Crawlspace","Basement"] },
-    { id:"ac", label:"AC Condenser?", opts:["Yes","No"] },
-    { id:"acton", label:"AC Condenser size", opts:TONS.slice(2), showIf:(a)=>a.ac==="Yes" },
-    ...UNIVERSAL,
-  ],
+  "New HVAC System (Heat Pump)": {
+    global: [
+      { id:"sys", label:"How many systems?", opts:["1","2","3","4"] },
+      { id:"kind", label:"System type", opts:["Traditional Ducted","Mini-Split"] },
+      { id:"brand", label:"Mini-split brand", opts:["Bryant","Mitsubishi"], showIf:(a)=>a.kind==="Mini-Split" },
+      { id:"msMode", label:"Mini-split style", opts:["Ducted","Ductless","Both"], showIf:(a)=>a.kind==="Mini-Split" },
+      { id:"headType", label:"Indoor unit type", opts:["Cassettes","High-Wall Heads","Both"], showIf:(a)=>a.kind==="Mini-Split"&&(a.msMode==="Ductless"||a.msMode==="Both") },
+    ],
+    perSystem: [
+      { id:"ton", label:"Air Handler tonnage", opts:TONS, showIf:(a)=>a.kind==="Traditional Ducted" },
+      { id:"hpton", label:"Outdoor Heat Pump size (Tons)", opts:HPTONS },
+      { id:"zones", label:"# of Zones (2+ adds electronic dampers & zone control board)", opts:["1","2","3"], showIf:(a)=>a.kind==="Traditional Ducted" },
+      { id:"ductloc", label:"Duct location", opts:DUCTLOC, showIf:(a)=>a.kind==="Traditional Ducted" },
+      { id:"strips", label:"Backup electric heat strips?", opts:["No","5 kW","10 kW","15 kW"], showIf:(a)=>a.kind==="Traditional Ducted" },
+      { id:"units", label:"# of indoor units", opts:["1","2","3","4","5","6"], showIf:(a)=>a.kind==="Mini-Split" },
+      { id:"uKind", label:"Unit {n}: ducted or ductless?", opts:["Ducted","Ductless"], showIf:(a)=>a.kind==="Mini-Split"&&a.msMode==="Both", perCount:"units" },
+      { id:"uTon", label:"Unit {n} size (Tons)", opts:TONS, showIf:(a)=>a.kind==="Mini-Split"&&a.msMode==="Ducted", perCount:"units" },
+      { id:"uBtu", label:"Unit {n} size (kBTU)", opts:["6","9","12","18","24","30","36"], showIf:(a)=>a.kind==="Mini-Split"&&a.msMode!=="Ducted", perCount:"units" },
+      { id:"uLoc", label:"Unit {n} location", select:true, opts:HEADLOC, showIf:(a)=>a.kind==="Mini-Split", perCount:"units" },
+      { id:"msDuctloc", label:"Duct location for ducted units", opts:DUCTLOC, showIf:(a)=>a.kind==="Mini-Split"&&a.msMode!=="Ductless" },
+      { id:"mount", label:"Condenser mounting", opts:["Ground Pad","Wall Bracket"], showIf:(a)=>a.kind==="Mini-Split" },
+      { id:"lscover", label:"Line-set cover on exterior runs?", opts:["Yes","No"], showIf:(a)=>a.kind==="Mini-Split" },
+    ],
+    universal: UNIVERSAL,
+  },
+  "New Furnace & AC System": {
+    global: [
+      { id:"sys", label:"How many systems?", opts:["1","2","3","4"] },
+      { id:"eff", label:"Furnace efficiency", opts:["80%","95%","96%+"] },
+    ],
+    perSystem: [
+      { id:"fsize", label:"Furnace size", opts:["2-Ton 40kBTU","3-Ton 40kBTU","3-Ton 60kBTU","3-Ton 70kBTU","4-Ton 80kBTU","4-Ton 90kBTU","5-Ton 100kBTU","5-Ton 110kBTU","5-Ton 120kBTU"] },
+      { id:"floc", label:"Furnace location", opts:["Attic","Interior Closet","Garage","Crawlspace","Basement"] },
+      { id:"zones", label:"# of Zones (2+ adds electronic dampers & zone control board)", opts:["1","2","3"] },
+      { id:"ductloc", label:"Duct location", opts:DUCTLOC },
+      { id:"ac", label:"AC Condenser?", opts:["Yes","No"] },
+      { id:"acton", label:"AC Condenser size (Tons)", opts:TONS.slice(2), showIf:(a,s)=>per2(a,"ac",s)==="Yes" },
+    ],
+    universal: UNIVERSAL,
+  },
   "HERS Testing & Certificate Production": [
     { id:"rescom", label:"Residential or Commercial?", opts:["Residential","Commercial"] },
     { id:"rtype", label:"Project type", opts:["New Construction","Alteration / Change-Out"], showIf:(a)=>a.rescom==="Residential" },
@@ -517,22 +530,40 @@ const WIZARDS = {
     { id:"comm", label:"Commercial certificates (NRCI-MCH-01-E always included — tap all that apply)", multi:true, opts:NRCA, showIf:(a)=>a.rescom==="Commercial" },
   ],
 };
+function per2(a, id, s) { return a[id + "_" + s] ?? a[id + "_0"] ?? a[id]; }
 function renderWizard() {
-  const jt = $("fJobType").value, qs = WIZARDS[jt], w = $("wizard");
-  if (!qs) { w.classList.add("hidden"); $("wizBuild").classList.add("hidden"); return; }
+  const jt = $("fJobType").value, W = WIZARDS[jt], w = $("wizard");
+  if (!W) { w.classList.add("hidden"); $("wizBuild").classList.add("hidden"); return; }
   WA._jt = jt === "New Furnace & AC System" ? "furnace" : jt === "New HVAC System (Heat Pump)" ? "hp" : "hers";
   w.classList.remove("hidden"); $("wizBuild").classList.remove("hidden");
-  w.innerHTML = qs.filter((q) => !q.showIf || q.showIf(WA)).map((q) => {
-    if (q.perCount) {
-      const n = parseInt(WA[q.perCount] || "1");
-      if (n === 1) return wRow(q, 0, q.label.replace(" — System {n}", "").replace("Unit {n}", "Unit").replace(" {n}", ""));
-      return [...Array(n)].map((_, i) => wRow(q, i, q.label.replace("{n}", i + 1))).join("");
+  let out = "";
+  if (Array.isArray(W)) {
+    out = W.filter((q) => !q.showIf || q.showIf(WA)).map((q) => wRow(q, null, q.label)).join("");
+  } else {
+    out += W.global.filter((q) => !q.showIf || q.showIf(WA)).map((q) => wRow(q, null, q.label)).join("");
+    const n = parseInt(WA.sys || "1");
+    for (let s = 0; s < n; s++) {
+      const qs = W.perSystem.filter((q) => !q.showIf || q.showIf(WA, s));
+      if (!qs.length) continue;
+      if (n > 1) out += `<div class="wsys">SYSTEM ${s + 1}</div>`;
+      out += qs.map((q) => {
+        if (q.perCount) {
+          const m = parseInt(WA[q.perCount + "_" + s] || "1");
+          return [...Array(m)].map((_, u) => wRow(q, s + "_" + u, q.label.replace("{n}", u + 1))).join("");
+        }
+        return wRow(q, String(s), q.label);
+      }).join("");
     }
-    return wRow(q, null, q.label);
-  }).join("");
+    out += W.universal.filter((q) => !q.showIf || q.showIf(WA)).map((q) => wRow(q, null, q.label)).join("");
+  }
+  w.innerHTML = out;
 }
-function wRow(q, idx, label) {
-  const key = idx == null ? q.id : q.id + "_" + idx;
+function wRow(q, suffix, label) {
+  const key = suffix == null ? q.id : q.id + "_" + suffix;
+  if (q.select) {
+    const opts = ['<option value="">— choose —</option>', ...q.opts.map((o) => `<option${WA[key] === o ? " selected" : ""}>${o}</option>`)].join("");
+    return `<div class="wq"><div class="wl">${label}</div><select onchange="wizSet('${key}',this.value,false)">${opts}</select></div>`;
+  }
   return `<div class="wq"><div class="wl">${label}</div><div class="wopts">` +
     q.opts.map((o) => {
       const on = q.multi ? (WA[key] || []).includes(o) : WA[key] === o;
@@ -544,11 +575,20 @@ function wizSet(key, val, multi) {
   else WA[key] = val;
   renderWizard();
 }
-const per = (id, i) => WA[id + "_" + i] || WA[id + "_0"] || WA[id];
+const per = (id, i) => WA[id + "_" + i] ?? WA[id + "_0"] ?? WA[id];
+function tstatName(a) { return a.tstat === "Smart (Ecobee/Nest)" ? "Smart Thermostat" : a.tstat === "Wall Mounted Remote" ? "Wall-Mounted Remote Controller" : "Programmable Thermostat"; }
 function removalLines(a) {
   const r = (a.removal || []).filter((x) => x !== "Nothing");
   const map = { "Furnace": "Remove and dispose of the existing furnace", "AC Condenser": "Remove and dispose of the existing outdoor condensing unit", "Air Handler": "Remove and dispose of the existing air handler and evaporator coil", "Ductwork": "Remove and dispose of the existing duct distribution system" };
   return r.map((x) => map[x]);
+}
+function elecLines(a, L) {
+  if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
+  if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
+}
+function tstatLine(a, zones) {
+  const name = tstatName(a);
+  return zones > 1 ? `Install ${zones} New ${name}s on the wall in the specified locations` : `Install a New ${name} on the wall in the specified location`;
 }
 function universalTail(a, L) {
   L.push("Ensure all work complies with the " + ($("fCity").value || "[CITY]") + " City Codes & Regulations");
@@ -574,22 +614,24 @@ function buildHP(a) {
   const L = [], sys = parseInt(a.sys || "1");
   if (a.kind === "Traditional Ducted") {
     for (let i = 0; i < sys; i++) {
-      const ton = per("ton", i) || "[TON]", code = TONCODE[ton] || "[XX]", loc = (per("ductloc", i) || "attic").toLowerCase();
-      const zones = parseInt(a.zones || "1");
+      const ton = per("ton", i) || "[TON]", code = TONCODE[ton] || "[XX]";
+      const hpton = per("hpton", i) || ton, hpcode = TONCODE[hpton] || "[XX]";
+      const loc = (per("ductloc", i) || "attic").toLowerCase();
+      const zones = parseInt(per("zones", i) || "1");
+      const strips = per("strips", i);
       L.push(`# ${sys > 1 ? "SYSTEM " + (i + 1) + " — " : ""}NEW ${ton}-TON BRYANT HEAT PUMP SYSTEM`);
       if (i === 0) L.push(...removalLines(a));
       L.push("Install a New Drain Pan on the HVAC Platform");
       L.push("Install Air Handler Legs inside the drain pan to support the new Air Handler");
       L.push(`Install a New ${ton}-Ton, High-Efficient, **Bryant Air Handler**`);
       L.push(`- *Model No.45MUAAQ${code}XX3*`);
-      if (a.strips && a.strips !== "No") L.push(`Install a New ${a.strips} Electric Heat Strip Kit inside the new Air Handler for backup heat`);
+      if (strips && strips !== "No") L.push(`Install a New ${strips} Electric Heat Strip Kit inside the new Air Handler for backup heat`);
       L.push("Install a New Fusible Disconnect Box next to the new Air Handler with all applicable fuses");
       L.push("Install New Supply and Return Plenums onto the new Air Handler");
-      L.push(`Install a New ${ton}-Ton, High-Efficient, 15 SEER **Bryant Heat Pump Condenser** outside the home`);
-      L.push(`- *Model No.37MURAQ${code}*`);
+      L.push(`Install a New ${hpton}-Ton, High-Efficient, 15 SEER **Bryant Heat Pump Condenser** outside the home`);
+      L.push(`- *Model No.37MURAQ${hpcode}*`);
       L.push(a.lineset === "Reuse & flush existing" ? "Flush and reuse the existing Line-Set between the Air Handler and the outdoor Heat Pump" : "Install a New Line-Set running from the newly installed Air Handler to the outdoor Heat Pump");
-      if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
-      if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
+      elecLines(a, L);
       L.push("Install a Fusible Disconnect Box on the wall next to the New Heat Pump Condenser with the proper fuses");
       L.push("Ensure all exposed electrical wire is ran through conduit");
       L.push("Install New Primary and Secondary Condensate Drains on the newly installed Air Handler and drain pan");
@@ -600,62 +642,69 @@ function buildHP(a) {
         L.push(`Install a Zone Control Board to manage the ${zones} zones`);
       }
       L.push("Seal All New Connections with Mastic, Zip-Ties, and UL Listed Tape to ensure minimal leakage");
-      L.push(`Install ${zones > 1 ? zones + " New " + (a.tstat === "Smart (Ecobee/Nest)" ? "Smart" : "Programmable") + " Thermostats" : "a New " + (a.tstat === "Smart (Ecobee/Nest)" ? "Smart" : "Programmable") + " Thermostat"} on the wall in the specified location${zones > 1 ? "s" : ""}`);
+      L.push(tstatLine(a, zones));
       L.push("Charge the System with the New R-454B Refrigerant with Puron Advanced");
       if (i < sys - 1) L.push("");
     }
   } else {
-    const brand = a.brand || "Bryant", units = parseInt(a.units || "1"), mode = a.msMode || "Ductless";
-    L.push(`# NEW ${brand.toUpperCase()} ${mode === "Both" ? "DUCTED & DUCTLESS" : mode.toUpperCase()} MINI-SPLIT SYSTEM`);
-    L.push(...removalLines(a));
-    for (let i = 0; i < units; i++) {
-      const kindU = mode === "Both" ? (per("uKind", i) || "Ductless") : mode;
-      if (kindU === "Ducted") {
-        const ton = per("uTon", i), code = TONCODE[ton] || "[XX]";
-        L.push(`Install a New ${ton || "[SIZE]"}-Ton ${brand} Ducted Indoor Unit${units > 1 ? " (Unit " + (i + 1) + ")" : ""}`);
-        if (brand === "Bryant") L.push(`- *Air Handler Model No.45MUAAQ${code}*`);
-        L.push(`Install new duct distribution for this unit in the ${(a.msDuctloc || "attic").toLowerCase()}, Insulated to an R-8 Value`);
-      } else {
-        const btu = per("uBtu", i) || "[SIZE]", style = a.headType === "Cassettes" ? "Ceiling Cassette" : a.headType === "Both" ? "Cassette / High-Wall Head" : "Indoor High-Wall Head";
-        L.push(`Install a New ${btu}kBTU ${brand} ${style} in the specified location${units > 1 ? " (Unit " + (i + 1) + ")" : ""}`);
+    const brand = a.brand || "Bryant", mode = a.msMode || "Ductless";
+    for (let s = 0; s < sys; s++) {
+      const units = parseInt(per("units", s) || "1");
+      const hpton = per("hpton", s);
+      L.push(`# ${sys > 1 ? "SYSTEM " + (s + 1) + " — " : ""}NEW ${brand.toUpperCase()} ${mode === "Both" ? "DUCTED & DUCTLESS" : mode.toUpperCase()} MINI-SPLIT SYSTEM`);
+      if (s === 0) L.push(...removalLines(a));
+      for (let u = 0; u < units; u++) {
+        const kindU = mode === "Both" ? (WA["uKind_" + s + "_" + u] || "Ductless") : mode;
+        const locU = WA["uLoc_" + s + "_" + u];
+        const locTxt = locU && locU !== "Other" ? " in the **" + locU.toLowerCase() + "**" : " in the specified location";
+        if (kindU === "Ducted") {
+          const ton = WA["uTon_" + s + "_" + u], code = TONCODE[ton] || "[XX]";
+          L.push(`Install a New ${ton || "[SIZE]"}-Ton ${brand} Ducted Indoor Unit${locTxt}`);
+          if (brand === "Bryant") L.push(`- *Air Handler Model No.45MUAAQ${code}*`);
+          L.push(`Install new duct distribution for this unit in the ${(per("msDuctloc", s) || "attic").toLowerCase()}, Insulated to an R-8 Value`);
+        } else {
+          const btu = WA["uBtu_" + s + "_" + u] || "[SIZE]";
+          const style = a.headType === "Cassettes" ? "Ceiling Cassette" : a.headType === "Both" ? "Cassette / High-Wall Head" : "Indoor High-Wall Head";
+          L.push(`Install a New ${btu}kBTU ${brand} ${style}${locTxt}`);
+        }
       }
+      L.push(`Install a New ${hpton ? hpton + "-Ton " : ""}${brand} Mini-Split Heat Pump Condenser outside the building on a ${per("mount", s) === "Wall Bracket" ? "wall-mounted bracket" : "ground pad"}`);
+      L.push(a.lineset === "Reuse & flush existing" ? "Flush and reuse the existing Line-Set(s)" : "Install Line-Set(s) running from each indoor unit to the outdoor Condenser");
+      if (per("lscover", s) === "Yes") L.push("Install Line-Set Cover to protect and conceal the exterior refrigerant lines");
+      elecLines(a, L);
+      L.push("Install a Fusible Disconnect Box on the wall next to the New Condenser with the proper fuses");
+      L.push("Ensure all exposed electrical wire is ran through conduit");
+      L.push("Install Condensate Drainage for each indoor unit, routed to the outside of the building");
+      L.push("Charge the System with the New Refrigerant per manufacturer specification");
+      if (s < sys - 1) L.push("");
     }
-    L.push(`Install a New ${brand} Mini-Split Heat Pump Condenser outside the building on a ${a.mount === "Wall Bracket" ? "wall-mounted bracket" : "ground pad"}`);
-    L.push(a.lineset === "Reuse & flush existing" ? "Flush and reuse the existing Line-Set(s)" : "Install Line-Set(s) running from each indoor unit to the outdoor Condenser");
-    if (a.lscover === "Yes") L.push("Install Line-Set Cover to protect and conceal the exterior refrigerant lines");
-    if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
-    if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
-    L.push("Install a Fusible Disconnect Box on the wall next to the New Condenser with the proper fuses");
-    L.push("Ensure all exposed electrical wire is ran through conduit");
-    L.push("Install Condensate Drainage for each indoor unit, routed to the outside of the building");
-    L.push("Charge the System with the New Refrigerant per manufacturer specification");
   }
   universalTail(a, L);
   return L.join("\n");
 }
 function buildFurnace(a) {
-  const L = [], sys = parseInt(a.sys || "1"), zones = parseInt(a.zones || "1");
-  const fs = a.fsize || "[SIZE]", ton = fs.split("-")[0], floc = a.floc || "[LOCATION]";
-  const horiz = ["Attic", "Crawlspace"].includes(floc);
+  const L = [], sys = parseInt(a.sys || "1");
   for (let i = 0; i < sys; i++) {
-    const loc = (per("ductloc", i) || "attic").toLowerCase();
-    L.push(`# ${sys > 1 ? "SYSTEM " + (i + 1) + " — " : ""}NEW ${fs} FURNACE${a.ac === "Yes" ? " & AC SYSTEM" : ""}`);
+    const fs = per("fsize", i) || "[SIZE]", floc = per("floc", i) || "[LOCATION]";
+    const zones = parseInt(per("zones", i) || "1"), loc = (per("ductloc", i) || "attic").toLowerCase();
+    const ac = per("ac", i), acton = per("acton", i);
+    const horiz = ["Attic", "Crawlspace"].includes(floc);
+    L.push(`# ${sys > 1 ? "SYSTEM " + (i + 1) + " — " : ""}NEW ${fs} FURNACE${ac === "Yes" ? " & AC SYSTEM" : ""}`);
     if (i === 0) L.push(...removalLines(a));
     L.push(`Install a New ${fs}, ${a.eff || ""} High-Efficient, **Bryant Furnace** in the ${floc.toLowerCase()}`);
     L.push("- *Model No.[FURNACE MODEL]*");
     L.push(a.eff === "80%" ? "Install a New Metal B-Vent exhaust for the new furnace" : "Install New 2-inch PVC exhaust venting for the new Sealed Combustion furnace");
     L.push("Install a New Gas Sediment Trap on the gas line at the furnace connection");
-    if (a.ac === "Yes") {
-      const acton = a.acton || "[TON]", code = TONCODE[acton] || "[XX]";
-      L.push(`Install a New ${acton}-Ton, ${horiz ? "Horizontally" : "Vertically"}-Cased Evaporator Coil onto the furnace`);
-      L.push(`Install a New ${acton}-Ton **Bryant AC Condenser** outside the home`);
+    if (ac === "Yes") {
+      const code = TONCODE[acton] || "[XX]";
+      L.push(`Install a New ${acton || "[TON]"}-Ton, ${horiz ? "Horizontally" : "Vertically"}-Cased Evaporator Coil onto the furnace`);
+      L.push(`Install a New ${acton || "[TON]"}-Ton **Bryant AC Condenser** outside the home`);
       L.push(`- *Model No.[CONDENSER MODEL] (${code}kBTU)*`);
       L.push(a.lineset === "Reuse & flush existing" ? "Flush and reuse the existing Line-Set between the Evaporator Coil and the outdoor Condenser" : "Install a New Line-Set running from the newly installed Evaporator Coil to the outdoor Condenser");
       L.push("Install a Fusible Disconnect Box on the wall next to the New Condenser with the proper fuses");
       L.push("Charge the System with the New Refrigerant per manufacturer specification");
     }
-    if (a.elec === "New dedicated circuit") L.push("Run a New Dedicated Electrical Circuit from the main panel to the new equipment");
-    if (a.elec === "To be performed by GC") L.push("**All required electrical work to be performed by the General Contractor**");
+    elecLines(a, L);
     L.push("Ensure all exposed electrical wire is ran through conduit");
     L.push("Install New Primary and Secondary Condensate Drains");
     L.push(`Ensure the duct distribution in the ${loc} is properly connected and sealed`);
@@ -664,7 +713,7 @@ function buildFurnace(a) {
       L.push(`Install a Zone Control Board to manage the ${zones} zones`);
     }
     L.push("Seal All New Connections with Mastic, Zip-Ties, and UL Listed Tape to ensure minimal leakage");
-    L.push(`Install ${zones > 1 ? zones + " New " + (a.tstat === "Smart (Ecobee/Nest)" ? "Smart" : "Programmable") + " Thermostats" : "a New " + (a.tstat === "Smart (Ecobee/Nest)" ? "Smart" : "Programmable") + " Thermostat"} on the wall in the specified location${zones > 1 ? "s" : ""}`);
+    L.push(tstatLine(a, zones));
     if (i < sys - 1) L.push("");
   }
   universalTail(a, L);
@@ -700,7 +749,7 @@ function wizardBuild() {
   setScopeMarkers(builders[jt](WA));
   if (jt === "HERS Testing & Certificate Production") setDocType("Invoice");
   toast("✅ Scope built — review and edit below");
-  $("fScope").scrollIntoView({ behavior: "smooth" });
+  if ($("fScope").scrollIntoView) $("fScope").scrollIntoView({ behavior: "smooth" });
 }
 
 /* =============== VOICE =============== */
