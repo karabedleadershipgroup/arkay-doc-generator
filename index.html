@@ -482,11 +482,17 @@ function inlineHtml(s) {
   return s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
 }
 function scopeToHtml(text) {
-  return parseScope(text).map((l) => {
-    if (l.kind === "gap") return '<div style="height:8px"></div>';
-    if (l.kind === "head") return `<div style="font-weight:800;margin:10px 0 4px"><span style="color:var(--green)">●</span> ${inlineHtml(l.text)}</div>`;
-    if (l.kind === "sub") return `<div style="margin-left:52px;text-indent:-14px">o&nbsp; ${inlineHtml(l.text)}</div>`;
-    return `<div style="margin-left:26px;text-indent:-13px;margin-bottom:2px">•&nbsp; ${inlineHtml(l.text)}</div>`;
+  const lines = parseScope(text);
+  return lines.map((l, i) => {
+    const prev = lines[i - 1] || {}, next = lines[i + 1] || {};
+    if (l.kind === "gap") return '<div style="height:12px"></div>';
+    if (l.kind === "head") return `<div style="font-weight:800;margin:${i ? 16 : 2}px 0 8px"><span style="color:var(--green)">●</span> ${inlineHtml(l.text)}</div>`;
+    if (l.kind === "sub") {
+      const mt = prev.kind !== "sub" ? "margin-top:10px;" : "";
+      const mb = next.kind !== "sub" ? "margin-bottom:12px;" : "margin-bottom:3px;";
+      return `<div style="margin-left:104px;text-indent:-16px;${mt}${mb}">o&nbsp;&nbsp; ${inlineHtml(l.text)}</div>`;
+    }
+    return `<div style="margin-left:46px;text-indent:-15px;margin-bottom:4px">•&nbsp;&nbsp; ${inlineHtml(l.text)}</div>`;
   }).join("");
 }
 function xesc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -503,11 +509,17 @@ function inlineRuns(s, baseBold, baseItal) {
   return out.join("");
 }
 function scopeToXml(text) {
-  return parseScope(text).map((l) => {
-    if (l.kind === "gap") return '<w:p><w:pPr><w:spacing w:after="60"/></w:pPr></w:p>';
-    if (l.kind === "head") return `<w:p><w:pPr><w:spacing w:before="140" w:after="60"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="6DBE45"/></w:rPr><w:t xml:space="preserve">●  </w:t></w:r>${inlineRuns(l.text, true, false)}</w:p>`;
-    if (l.kind === "sub") return `<w:p><w:pPr><w:ind w:left="1440" w:hanging="260"/><w:spacing w:after="30"/></w:pPr><w:r><w:t xml:space="preserve">o   </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
-    return `<w:p><w:pPr><w:ind w:left="700" w:hanging="240"/><w:spacing w:after="40"/></w:pPr><w:r><w:t xml:space="preserve">•  </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
+  const lines = parseScope(text);
+  return lines.map((l, i) => {
+    const prev = lines[i - 1] || {}, next = lines[i + 1] || {};
+    if (l.kind === "gap") return '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>';
+    if (l.kind === "head") return `<w:p><w:pPr><w:spacing w:before="${i ? 200 : 40}" w:after="100"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="6DBE45"/></w:rPr><w:t xml:space="preserve">●  </w:t></w:r>${inlineRuns(l.text, true, false)}</w:p>`;
+    if (l.kind === "sub") {
+      const before = prev.kind !== "sub" ? ' w:before="140"' : "";
+      const after = next.kind !== "sub" ? "160" : "40";
+      return `<w:p><w:pPr><w:ind w:left="2160" w:hanging="330"/><w:spacing${before} w:after="${after}"/></w:pPr><w:r><w:t xml:space="preserve">o    </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
+    }
+    return `<w:p><w:pPr><w:ind w:left="1030" w:hanging="310"/><w:spacing w:after="60"/></w:pPr><w:r><w:t xml:space="preserve">•   </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
   }).join("");
 }
 
