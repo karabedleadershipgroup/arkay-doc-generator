@@ -67,7 +67,7 @@ table.hist th { background:var(--light); color:var(--green-dark); font-size:11px
 #docPreview table.info td { border:1px solid var(--border); padding:7px 10px; }
 #docPreview table.info td:first-child { background:#EAF5E3; font-weight:700; width:170px; }
 #docPreview .bar { background:var(--green); color:#fff; font-weight:800; padding:8px 12px; letter-spacing:.5px; margin:16px 0 10px; font-size:13px; }
-#docPreview .box { background:var(--light); border:1px solid var(--border); padding:12px 14px; white-space:pre-wrap; }
+#docPreview .box { background:var(--light); border:1px solid var(--border); padding:12px 14px; }
 #docPreview .tot { display:flex; border:1px solid var(--border); background:var(--light); }
 #docPreview .tot div { padding:11px 14px; } #docPreview .tot div:first-child { flex:1; font-weight:800; }
 #docPreview .tot div:last-child { font-weight:800; color:var(--green); font-size:16px; }
@@ -460,6 +460,55 @@ async function translateScope() {
 }
 
 /* =============== PREVIEW + GENERATE =============== */
+/* =============== SCOPE FORMATTING ENGINE ===============
+   Line rules: ALL-CAPS ending ":" = bold header with green bullet
+   "- " or "o " prefix = indented hollow sub-bullet
+   anything else = solid bullet   |  **bold**  *italic*            */
+function parseScope(text) {
+  return text.split("\n").map((raw) => {
+    const line = raw.replace(/^[·•]\s*/, "").trimEnd();
+    const t = line.trim();
+    if (!t) return { kind: "gap" };
+    if (/^[^a-z]{4,}:$/.test(t)) return { kind: "head", text: t };
+    if (/^(-|o)\s+/.test(t)) return { kind: "sub", text: t.replace(/^(-|o)\s+/, "") };
+    return { kind: "main", text: t };
+  });
+}
+function inlineHtml(s) {
+  s = s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
+}
+function scopeToHtml(text) {
+  return parseScope(text).map((l) => {
+    if (l.kind === "gap") return '<div style="height:8px"></div>';
+    if (l.kind === "head") return `<div style="font-weight:800;margin:10px 0 4px"><span style="color:var(--green)">●</span> ${inlineHtml(l.text)}</div>`;
+    if (l.kind === "sub") return `<div style="margin-left:52px;text-indent:-14px">o&nbsp; ${inlineHtml(l.text)}</div>`;
+    return `<div style="margin-left:26px;text-indent:-13px;margin-bottom:2px">•&nbsp; ${inlineHtml(l.text)}</div>`;
+  }).join("");
+}
+function xesc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function inlineRuns(s, baseBold, baseItal) {
+  // split on **bold** and *italic*, emit w:r runs
+  const out = [];
+  const parts = s.split(/(\*\*.+?\*\*|\*[^*]+?\*)/g).filter(Boolean);
+  for (const p of parts) {
+    let txt = p, b = baseBold, i = baseItal;
+    if (/^\*\*.+\*\*$/.test(p)) { txt = p.slice(2, -2); b = true; }
+    else if (/^\*[^*]+\*$/.test(p)) { txt = p.slice(1, -1); i = true; }
+    out.push(`<w:r><w:rPr>${b?"<w:b/>":""}${i?"<w:i/>":""}</w:rPr><w:t xml:space="preserve">${xesc(txt)}</w:t></w:r>`);
+  }
+  return out.join("");
+}
+function scopeToXml(text) {
+  return parseScope(text).map((l) => {
+    if (l.kind === "gap") return '<w:p><w:pPr><w:spacing w:after="60"/></w:pPr></w:p>';
+    if (l.kind === "head") return `<w:p><w:pPr><w:spacing w:before="140" w:after="60"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="6DBE45"/></w:rPr><w:t xml:space="preserve">●  </w:t></w:r>${inlineRuns(l.text, true, false)}</w:p>`;
+    if (l.kind === "sub") return `<w:p><w:pPr><w:ind w:left="1440" w:hanging="260"/><w:spacing w:after="30"/></w:pPr><w:r><w:t xml:space="preserve">o   </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
+    return `<w:p><w:pPr><w:ind w:left="700" w:hanging="240"/><w:spacing w:after="40"/></w:pPr><w:r><w:t xml:space="preserve">•  </w:t></w:r>${inlineRuns(l.text, false, false)}</w:p>`;
+  }).join("");
+}
+
+
 function docTitle() { const t = TEMPLATES[$("fJobType").value]; if (DOC_TYPE === "Invoice") return ($("fJobType").value === "HERS Testing & Certificate Production") ? "HERS INVOICE" : "INVOICE"; return t ? t.docTitle : "PROPOSAL"; }
 function fullAddress() { return [$("fAddr").value, $("fCity").value ? $("fCity").value + ", CA" : ""].filter(Boolean).join(", "); }
 function amountStr() { const a = parseFloat($("fAmount").value); return isNaN(a) ? "$0.00" : "$" + a.toLocaleString("en-US", { minimumFractionDigits: 2 }); }
@@ -477,9 +526,9 @@ function preview() {
       <tr><td>Client Name:</td><td>${$("fClient").value || "—"}</td></tr>
       <tr><td>Property Address:</td><td>${fullAddress() || "—"}</td></tr>
     </table>
-    ${hasObs ? `<div class="bar">OBSERVATION AND RECOMMENDATION</div><div class="box">${$("fObs").value}</div>` : ""}
+    ${hasObs ? `<div class="bar">OBSERVATION AND RECOMMENDATION</div><div class="box">${scopeToHtml($("fObs").value)}</div>` : ""}
     <div class="bar">${DOC_TYPE === "Invoice" ? "DESCRIPTION OF WORK" : "SCOPE OF WORK"}</div>
-    <div class="box">${$("fScope").value || "—"}</div>
+    <div class="box">${scopeToHtml($("fScope").value) || "—"}</div>
     <div class="bar">${DOC_TYPE === "Invoice" ? "AMOUNT DUE" : "TOTAL INVESTMENT"}</div>
     <div class="tot"><div>${DOC_TYPE === "Invoice" ? "Amount Due" : "Total Investment"}</div><div>${amountStr()}</div></div>
     <div class="note">${DOC_TYPE === "Invoice" ? "Amount due includes ALL labor and materials for the work described above.<br>Thank you for your business — payment is appreciated within 15 days of the invoice date." : "Total investment includes ALL labor and materials necessary to complete the scope of work listed above."}</div>
@@ -526,12 +575,12 @@ async function generate(kind) {
       doc.render(isInv ? {
         Title: t.title || $("fJobType").value, InvoiceNo: $("fNum").value, Date: dateStr,
         ClientName: $("fClient").value, PropertyAddress: fullAddress(),
-        DescriptionOfWork: $("fScope").value, AmountDue: amountStr(),
+        DescriptionXml: scopeToXml($("fScope").value), AmountDue: amountStr(),
       } : {
         DocTitle: docTitle(), Title: t.title || $("fJobType").value, NoLabel: "Proposal No", DocNo: $("fNum").value,
         Date: dateStr, ClientName: $("fClient").value, PropertyAddress: fullAddress(),
-        HasObservation: !!hasObs, Observation: $("fObs").value,
-        ScopeOfWork: $("fScope").value, TotalInvestment: amountStr(),
+        HasObservation: !!hasObs, ObservationXml: hasObs ? scopeToXml($("fObs").value) : "<w:p/>",
+        ScopeXml: scopeToXml($("fScope").value), TotalInvestment: amountStr(),
         Notes: [],
       });
       blob = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
